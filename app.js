@@ -46,12 +46,18 @@ function formatDueDate(dueDate) {
 
 
 function openSidebar() {
-  document.querySelector('.sidebar').classList.add('mobile-open');
-  document.querySelector('.sidebar-overlay').classList.add('show');
+  const sb = document.querySelector('.sidebar');
+  const ov = document.querySelector('.sidebar-overlay');
+  if (sb) { sb.classList.add('mobile-open'); sb.style.transform = 'translateX(0)'; }
+  if (ov) ov.classList.add('show');
+  document.body.style.overflow = 'hidden';
 }
 function closeSidebar() {
-  document.querySelector('.sidebar').classList.remove('mobile-open');
-  document.querySelector('.sidebar-overlay').classList.remove('show');
+  const sb = document.querySelector('.sidebar');
+  const ov = document.querySelector('.sidebar-overlay');
+  if (sb) { sb.classList.remove('mobile-open'); sb.style.transform = ''; }
+  if (ov) ov.classList.remove('show');
+  document.body.style.overflow = '';
 }
 
 // ===== NAVIGATION =====
@@ -483,8 +489,11 @@ function renderProdCard(p) {
     <div class="pc-head" onclick="toggleProd(${p.id})">
       <div class="pc-head-info">
         <div class="pc-icon">📦</div>
-        <div>
-          <div class="pc-name">${p.name}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <div class="pc-name">${p.name}</div>
+            <button class="btn btn-bad btn-xs" onclick="event.stopPropagation();delProd(${p.id})" style="flex-shrink:0">🗑️</button>
+          </div>
           <div class="pc-meta">${fmtN(p.qty,2)} ${p.unit} · ${p.supplier || 'بێ فرۆشیار'}</div>
         </div>
       </div>
@@ -506,18 +515,17 @@ function renderProdCard(p) {
           <div class="v twarn">${fmtC(s.debtRemainUSD,'USD')}</div>
           <div class="l">قەرز</div>
         </div>` : ''}
-        <button class="btn btn-bad btn-xs" onclick="event.stopPropagation();delProd(${p.id})">🗑️</button>
       </div>
     </div>
     <div class="pc-body" id="pc-body-${p.id}">
       <div class="pc-tabs">
-        <div class="pc-tab active" data-tab="summary" onclick="switchProdTab(${p.id},'summary',this)">📊 سەرەکی</div>
+        <div class="pc-tab active" data-tab="summary" onclick="switchProdTab(${p.id},'summary',this)">📊</div>
         <div class="pc-tab" data-tab="load"    onclick="switchProdTab(${p.id},'load',this)">📥 بار</div>
-        <div class="pc-tab" data-tab="costs"   onclick="switchProdTab(${p.id},'costs',this)">🚚 خەرجی</div>
-        <div class="pc-tab" data-tab="sell"    onclick="switchProdTab(${p.id},'sell',this)">💰 فرۆشتن</div>
-        <div class="pc-tab" data-tab="debt"    onclick="switchProdTab(${p.id},'debt',this)">💳 قەرز</div>
-        <div class="pc-tab" data-tab="history" onclick="switchProdTab(${p.id},'history',this)">📋 مێژوو</div>
-        <div class="pc-tab" data-tab="print"   onclick="switchProdTab(${p.id},'print',this)">🖨️ پرینت</div>
+        <div class="pc-tab" data-tab="costs"   onclick="switchProdTab(${p.id},'costs',this)">🚚</div>
+        <div class="pc-tab" data-tab="sell"    onclick="switchProdTab(${p.id},'sell',this)">💰</div>
+        <div class="pc-tab" data-tab="debt"    onclick="switchProdTab(${p.id},'debt',this)">💳</div>
+        <div class="pc-tab" data-tab="history" onclick="switchProdTab(${p.id},'history',this)">📋</div>
+        <div class="pc-tab" data-tab="print"   onclick="switchProdTab(${p.id},'print',this)">🖨️</div>
       </div>
       <div class="pc-content" id="pc-content-${p.id}">
         ${renderProdSummary(p.id, s)}
@@ -955,11 +963,19 @@ function renderProdDebt(id, p, s) {
 
     ${s.debtRemainUSD>0?`<div class="ev-form">
       <div class="ev-form-title">💳 تۆمارکردنی پارەدانەوە</div>
+      ${debtors.length ? `<div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">👆 کڕیار هەڵبژێرە:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${debtors.map(d=>`<button type="button" class="btn btn-g btn-sm" onclick="fillDebtPay(${id},'${d.name.replace(/'/g,"\\'")}','${d.phone}')">
+            ${d.name}${d.phone?' · '+d.phone:''} <span class="tbad">(${fmtC(fromUSD(d.owed,'IQD'),'IQD')})</span>
+          </button>`).join('')}
+        </div>
+      </div>` : ''}
       <div class="fg2">
         <div class="fg"><label>بڕ</label><input id="ev-dp-${id}" type="number" step="0.01" placeholder="0.00"></div>
         <div class="fg"><label>دراو</label><select id="ev-dpcurr-${id}">${currOpts}</select></div>
-        <div class="fg"><label>ناوی قەرزار</label><input id="ev-dpbuyer-${id}" placeholder="..."></div>
-        <div class="fg"><label>ژمارە تەلەفون</label><input id="ev-dpphone-${id}" placeholder="07XX..." type="tel"></div>
+        <div class="fg"><label>ناوی قەرزار *</label><input id="ev-dpbuyer-${id}" placeholder="..."></div>
+        <div class="fg"><label>ژمارە تەلەفون *</label><input id="ev-dpphone-${id}" placeholder="07XX..." type="tel"></div>
         <div class="fg c2"><label>بەروار</label><input id="ev-dpdate-${id}" type="date" value="${today()}"></div>
       </div>
       <button class="btn btn-ok btn-sm" onclick="saveDebtPay(${id})">✅ تۆمارکردن</button>
@@ -977,14 +993,25 @@ function renderProdDebt(id, p, s) {
       </div>`).join('') : '<div class="empty">هیچ پارەدانەوەیەک نییە</div>'}</div>`;
 }
 
+function fillDebtPay(id, buyer, phone) {
+  const b = el('ev-dpbuyer-'+id); if(b) b.value = buyer;
+  const p = el('ev-dpphone-'+id); if(p) p.value = phone;
+}
+
 function saveDebtPay(id) {
-  const amt  = parseFloat(el('ev-dp-'+id)?.value)||0;
-  const date = el('ev-dpdate-'+id)?.value||'';
+  const amt    = parseFloat(el('ev-dp-'+id)?.value)||0;
+  const date   = el('ev-dpdate-'+id)?.value||'';
+  const buyer  = el('ev-dpbuyer-'+id)?.value?.trim()||'';
+  const phone  = el('ev-dpphone-'+id)?.value?.trim()||'';
   if (amt<=0)  return alert('⚠️ بڕی پارە داخڵ بکە');
   if (!date)   return alert('⚠️ بەروار داخڵ بکە');
-  addEvent({ productId:id, type:'debt_pay', amount:amt, currency:el('ev-dpcurr-'+id)?.value||'IQD',
-    date, buyer:el('ev-dpbuyer-'+id)?.value||'',
-    phone:el('ev-dpphone-'+id)?.value||'' });
+  if (!phone)  return alert('⚠️ ژمارە تەلەفونی قەرزار داخڵ بکە');
+  addEvent({
+    productId: id, type: 'debt_pay', amount: amt,
+    currency: el('ev-dpcurr-'+id)?.value||'IQD',
+    date, buyer, phone,
+    customerToken: makeCustomerToken(buyer, phone),
+  });
   refreshProdCard(id,'debt');
 }
 

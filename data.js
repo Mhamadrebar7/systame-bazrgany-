@@ -10,7 +10,7 @@ const DB = {
 
 // ===== CURRENCIES =====
 const DEFAULT_CURRENCIES = [
-  { code:'IQD', name:'دینار عیراقی',    flag:'🇮🇶', rateToUSD:1480,   symbol:'IQD' },
+  { code:'IQD', name:'دینار عیراقی',    flag:'🇮🇶', rateToUSD:1310,   symbol:'IQD' },
   { code:'USD', name:'دۆلاری ئەمریکی', flag:'🇺🇸', rateToUSD:1,      symbol:'$'   },
   { code:'TRY', name:'لیرەی تورک',      flag:'🇹🇷', rateToUSD:32.5,   symbol:'₺'   },
   { code:'EUR', name:'یوڕۆ',            flag:'🇪🇺', rateToUSD:0.92,   symbol:'€'   },
@@ -90,6 +90,7 @@ function addProduct(data) {
 function getProduct(id) { return getProducts().find(p => p.id == id); }
 
 function updateProductQty(id, delta) {
+  invalidateStatsCache();
   const prods = getProducts();
   const p = prods.find(x => x.id == id);
   if (p) { p.qty = (parseFloat(p.qty) || 0) + delta; saveProducts(prods); }
@@ -100,6 +101,7 @@ function getEvents(productId) { return (DB.get('events') || []).filter(e => e.pr
 function getAllEvents()        { return DB.get('events') || []; }
 
 function addEvent(data) {
+  invalidateStatsCache();
   const events = DB.get('events') || [];
   const ev = { id: nextId(), ...data, createdAt: new Date().toISOString() };
   events.push(ev);
@@ -108,6 +110,7 @@ function addEvent(data) {
 }
 
 function delEvent(id) {
+  invalidateStatsCache();
   const events = DB.get('events') || [];
   const ev = events.find(e => e.id == id);
   DB.set('events', events.filter(e => e.id != id));
@@ -121,8 +124,16 @@ function addSupplier(name, phone) { const s = [...getSuppliers(), { id: nextId()
 // ===== بەروار =====
 function today() { return new Date().toISOString().split('T')[0]; }
 
+// ===== کاچی ئامارەکان =====
+let _statsCache = {};
+let _statsCacheVersion = 0;
+
+function invalidateStatsCache() { _statsCache = {}; _statsCacheVersion++; }
+
 // ===== ئامارەکانی کاڵا =====
 function getProductStats(productId) {
+  if (_statsCache[productId]) return _statsCache[productId];
+
   const events = getEvents(productId);
   let loadCostUSD = 0, shippingUSD = 0, taxUSD = 0, totalLoadedQty = 0;
   let cashRevenueUSD = 0, debtRevenueUSD = 0, debtPaidUSD = 0, totalSoldQty = 0;
@@ -145,7 +156,7 @@ function getProductStats(productId) {
   const prod            = getProduct(productId);
   const stockQty        = prod ? parseFloat(prod.qty) || 0 : 0;
 
-  return {
+  return _statsCache[productId] = {
     loadCostUSD, shippingUSD, taxUSD, totalCostUSD,
     cashRevenueUSD, debtRevenueUSD, debtPaidUSD,
     totalRevenueUSD, debtRemainUSD, profitUSD,

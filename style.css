@@ -30,7 +30,7 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; direction:rtl; font-size:14px; }
+body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; direction:rtl; font-size:14px; overflow-x:hidden; }
 
 /* SCROLLBAR */
 ::-webkit-scrollbar { width:5px; height:5px; }
@@ -41,7 +41,7 @@ body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:va
 .sidebar {
   position:fixed; right:0; top:0; bottom:0; width:var(--sw);
   background:var(--bg2); border-left:1px solid var(--border);
-  z-index:100; display:flex; flex-direction:column; overflow-y:auto;
+  z-index:200; display:flex; flex-direction:column; overflow-y:auto;
   transition:transform .3s ease;
 }
 .sb-logo { padding:18px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
@@ -57,7 +57,7 @@ body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:va
 .sb-foot { margin-top:auto; padding:12px; border-top:1px solid var(--border); }
 
 /* MOBILE SIDEBAR OVERLAY */
-.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:99; backdrop-filter:blur(2px); }
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:199; backdrop-filter:blur(2px); }
 
 /* ===== MAIN ===== */
 .main { margin-right:var(--sw); min-height:100vh; transition:margin .3s; }
@@ -68,6 +68,8 @@ body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:va
 /* MOBILE MENU BTN */
 .menu-btn { display:none; background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:var(--rs); }
 .menu-btn:hover { background:var(--bg3); }
+.topbar-btn-icon { display:none; }
+.topbar-btn-full { display:inline; }
 
 /* ===== PAGES ===== */
 .page { display:none; padding:16px; max-width:1200px; }
@@ -263,40 +265,106 @@ tr:hover td { background:rgba(255,255,255,.02); }
 @media (max-width:768px) {
   :root { --sw: 0px; }
 
-  .sidebar { transform:translateX(100%); }
-  .sidebar.mobile-open { transform:translateX(0); }
+  /* Sidebar: لە ڕاستەوەیە، translateX(+%) دەیباتە دەرەوەی ڕاست */
+  .sidebar {
+    transform:translateX(100%);
+    right:0;
+    width:260px;
+  }
+  .sidebar.mobile-open {
+    transform:translateX(0);
+    box-shadow:-6px 0 30px rgba(0,0,0,.6);
+  }
   .sidebar-overlay.show { display:block; }
   .menu-btn { display:flex; }
 
   .main { margin-right:0; }
-  .page { padding:12px; }
+  .page { padding:10px; }
 
-  .fg2 { grid-template-columns:1fr; }
-  .fg3 { grid-template-columns:1fr 1fr; }
-  .c2, .c3 { grid-column:span 1; }
+  /* فۆرمەکان — ٢ ستوون بمێنن بۆ input بچووکەکان */
+  .fg2 { grid-template-columns:1fr 1fr; gap:8px; }
+  .fg3 { grid-template-columns:1fr 1fr; gap:8px; }
+  /* c2 و c3 پڕ-پانی بمێنن */
+  .c2 { grid-column:span 2; }
+  .c3 { grid-column:span 2; }
 
-  .grid-2 { grid-template-columns:1fr; }
-  .grid-3 { grid-template-columns:1fr 1fr; }
+  /* کارتەکانی داشبۆرد */
+  .grid-2 { grid-template-columns:1fr; gap:10px; }
+  .grid-3 { grid-template-columns:1fr 1fr; gap:8px; }
 
-  .sgrid { grid-template-columns:1fr 1fr; }
-  .scard .sv { font-size:14px; }
+  /* ستاتیستیکەکان */
+  .sgrid { grid-template-columns:1fr 1fr; gap:8px; }
+  .scard { padding:10px 8px; }
+  .scard .si { font-size:18px; }
+  .scard .sv { font-size:13px; }
+  .scard .sl { font-size:10px; }
 
-  .pc-stats { display:none; }
-  .pc-head { padding:12px; }
-  .pc-content { padding:12px; }
+  /* کارتی کاڵا — ئامارەکان نیشان بدە بەلام بچووک */
+  .pc-stats {
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    margin-top:6px;
+  }
+  .pc-stat .v { font-size:11px; }
+  .pc-stat .l { font-size:8px; }
+  .pc-head { padding:10px 12px; flex-direction:column; align-items:flex-start; gap:6px; }
+  .pc-head-info { width:100%; }
+  .pc-stats { width:100%; justify-content:flex-start; }
+  .pc-content { padding:10px; }
 
-  .topbar { padding:10px 14px; }
-  .topbar h2 { font-size:14px; }
+  /* تابەکان — بچووکتر */
+  .pc-tab { padding:8px 10px; font-size:11px; }
 
+  /* توپبار */
+  .topbar { padding:10px 12px; }
+  .topbar h2 { font-size:13px; }
+  .topbar-btn-full { display:none; }
+  .topbar-btn-icon { display:inline; }
+
+  /* دوگمەکان */
   .btn { padding:7px 12px; font-size:12px; }
-  .btn-sm { padding:5px 10px; font-size:11px; }
+  .btn-sm { padding:5px 9px; font-size:11px; }
+  .btn-xs { padding:3px 7px; font-size:10px; }
 
+  /* خشتەکان */
   table { font-size:11px; }
-  th, td { padding:7px 8px; }
+  th, td { padding:6px 7px; }
+
+  /* کارت */
+  .card { padding:12px 14px; }
+
+  /* ئاگاداری دینی کەم */
+  .stock-alert { font-size:12px; padding:8px 12px; }
+
+  /* ئایتمی ئیڤێنت */
+  .ev-item { padding:9px 10px; gap:8px; }
+  .ev-item .ev-title { font-size:11px; }
+  .ev-item .ev-meta { font-size:10px; }
+  .ev-item .ev-amount { font-size:12px; }
 }
 
-@media (max-width:400px) {
-  .sgrid { grid-template-columns:1fr; }
+@media (max-width:480px) {
+  .page { padding:8px; }
+  /* فۆرمی زیادکردنی کاڵا — تەک ستوون بکە */
+  #pg-addProduct .fg2 { grid-template-columns:1fr; }
+  #pg-addProduct .c2 { grid-column:span 1; }
+
+  /* داشبۆرد ستاتیستیک */
+  .sgrid { grid-template-columns:1fr 1fr; }
+
+  /* چارتەکان بچووکتر */
+  .grid-2 canvas { height:150px !important; }
+
+  /* سەرپەڕە */
+  .topbar h2 { font-size:12px; }
+}
+
+@media (max-width:360px) {
+  .sgrid { grid-template-columns:1fr 1fr; gap:6px; }
   .grid-3 { grid-template-columns:1fr; }
+  .fg2 { grid-template-columns:1fr; }
   .fg3 { grid-template-columns:1fr; }
+  .c2, .c3 { grid-column:span 1; }
+  .pc-tab { padding:7px 8px; font-size:10px; }
 }
