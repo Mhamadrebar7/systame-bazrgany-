@@ -50,6 +50,17 @@ function fmtC(amount, code) {
   return c.symbol + ' ' + fmtN(amount, dec);
 }
 
+// ===== نیشاندانی دوو دراو =====
+// کاتێک دراوەکە USD نەبوو، هەر دووی نیشان دەدات: نرخی ئەصلی + USD
+function fmtDual(amount, currency, rateSnapshot) {
+  if (!amount) return fmtC(0, currency);
+  const primary = fmtC(amount, currency);
+  if (currency === 'USD') return primary;
+  const rate = rateSnapshot || (getCurrencies().find(c=>c.code===currency)?.rateToUSD || 1);
+  const inUSD = (parseFloat(amount) || 0) / rate;
+  return `${primary} <span style="color:var(--muted);font-size:10px;font-weight:400">(≈ ${fmtC(inUSD,'USD')} · ${fmtN(rate,0)} ${currency}/$)</span>`;
+}
+
 function nextId() {
   let n = DB.get('nextId') || 1000;
   DB.set('nextId', n + 1);
@@ -103,7 +114,24 @@ function getAllEvents()        { return DB.get('events') || []; }
 function addEvent(data) {
   invalidateStatsCache();
   const events = DB.get('events') || [];
-  const ev = { id: nextId(), ...data, createdAt: new Date().toISOString() };
+  // نرخی گۆڕینەوەی ئێستا پاشەکەوت بکە
+  const currency = data.currency || 'USD';
+  const currs = getCurrencies();
+  const currObj = currs.find(c => c.code === currency);
+  const rateSnapshot = currObj ? currObj.rateToUSD : 1;
+  const amountUSD = data.totalPrice != null
+    ? toUSD(data.totalPrice, currency)
+    : data.amount != null
+    ? toUSD(data.amount, currency)
+    : 0;
+
+  const ev = {
+    id: nextId(),
+    ...data,
+    rateSnapshot,          // نرخی گۆڕینەوەی کاتی تۆمارکردن
+    amountUSD,             // بڕی USD لەو کاتەدا
+    createdAt: new Date().toISOString()
+  };
   events.push(ev);
   DB.set('events', events);
   return ev;
@@ -135,21 +163,23 @@ function getProductStats(productId) {
   if (_statsCache[productId]) return _statsCache[productId];
 
   const events = getEvents(productId);
-  let loadCostUSD = 0, shippingUSD = 0, taxUSD = 0, totalLoadedQty = 0;
+  let loadCostUSD = 0, shippingUSD = 0, taxUSD = 0, raseedUSD = 0, omolaUSD = 0, totalLoadedQty = 0;
   let cashRevenueUSD = 0, debtRevenueUSD = 0, debtPaidUSD = 0, totalSoldQty = 0;
 
   events.forEach(ev => {
     switch(ev.type) {
-      case 'load':      loadCostUSD += toUSD(ev.totalPrice, ev.currency); totalLoadedQty += parseFloat(ev.qty) || 0; break;
-      case 'shipping':  shippingUSD += toUSD(ev.amount, ev.currency); break;
-      case 'tax':       taxUSD += toUSD(ev.amount, ev.currency); break;
+      case 'load':      loadCostUSD  += toUSD(ev.totalPrice, ev.currency); totalLoadedQty += parseFloat(ev.qty) || 0; break;
+      case 'shipping':  shippingUSD  += toUSD(ev.amount, ev.currency); break;
+      case 'tax':       taxUSD       += toUSD(ev.amount, ev.currency); break;
+      case 'raseed':    raseedUSD    += toUSD(ev.amount, ev.currency); break;
+      case 'omola':     omolaUSD     += toUSD(ev.amount, ev.currency); break;
       case 'sell_cash': cashRevenueUSD += toUSD(ev.totalPrice, ev.currency); totalSoldQty += parseFloat(ev.qty) || 0; break;
       case 'sell_debt': debtRevenueUSD += toUSD(ev.totalPrice, ev.currency); totalSoldQty += parseFloat(ev.qty) || 0; break;
-      case 'debt_pay':  debtPaidUSD += toUSD(ev.amount, ev.currency); break;
+      case 'debt_pay':  debtPaidUSD  += toUSD(ev.amount, ev.currency); break;
     }
   });
 
-  const totalCostUSD    = loadCostUSD + shippingUSD + taxUSD;
+  const totalCostUSD    = loadCostUSD + shippingUSD + taxUSD + raseedUSD + omolaUSD;
   const totalRevenueUSD = cashRevenueUSD + debtRevenueUSD;
   const debtRemainUSD   = debtRevenueUSD - debtPaidUSD;
   const profitUSD       = totalRevenueUSD - totalCostUSD;
@@ -157,7 +187,7 @@ function getProductStats(productId) {
   const stockQty        = prod ? parseFloat(prod.qty) || 0 : 0;
 
   return _statsCache[productId] = {
-    loadCostUSD, shippingUSD, taxUSD, totalCostUSD,
+    loadCostUSD, shippingUSD, taxUSD, raseedUSD, omolaUSD, totalCostUSD,
     cashRevenueUSD, debtRevenueUSD, debtPaidUSD,
     totalRevenueUSD, debtRemainUSD, profitUSD,
     totalLoadedQty, totalSoldQty, stockQty, events,
@@ -186,9 +216,9 @@ function getProfitByRange(from, to) {
     const d = ev.date || ev.createdAt?.split('T')[0];
     if (d < from || d > to) return;
     if (ev.type === 'sell_cash' || ev.type === 'sell_debt') revenueUSD += toUSD(ev.totalPrice, ev.currency);
-    if (ev.type === 'load')     costUSD += toUSD(ev.totalPrice, ev.currency);
-    if (ev.type === 'shipping') costUSD += toUSD(ev.amount, ev.currency);
-    if (ev.type === 'tax')      costUSD += toUSD(ev.amount, ev.currency);
+    if (['load','shipping','tax','raseed','omola'].includes(ev.type)) {
+      costUSD += toUSD(ev.totalPrice ?? ev.amount, ev.currency);
+    }
   });
   return { revenueUSD, costUSD, profitUSD: revenueUSD - costUSD };
 }

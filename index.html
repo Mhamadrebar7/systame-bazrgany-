@@ -17,7 +17,8 @@
 <div class="sidebar">
   <div class="sb-logo">
     <div class="ico">📦</div>
-    <div><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.1</small></div>
+    <div style="flex:1"><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.1</small></div>
+    <button class="menu-btn sb-close-btn" onclick="closeSidebar()">✕</button>
   </div>
   <div class="nav-sec">
     <div class="nav-ttl">سەرەکی</div>
@@ -40,48 +41,29 @@
 
 <!-- MAIN -->
 <div class="main">
-  <div class="topbar">
-    <div style="display:flex;align-items:center;gap:10px">
-      <button class="menu-btn" onclick="openSidebar()">☰</button>
-      <h2 id="pageTitle">📊 داشبۆرد</h2>
-    </div>
-    <div class="topbar-right">
-      <button class="btn btn-p btn-sm" onclick="showPage('addProduct')"><span class="topbar-btn-full">➕ کاڵای نوێ</span><span class="topbar-btn-icon">➕</span></button>
-    </div>
-  </div>
-
   <!-- ====== LOW STOCK BANNER ====== -->
-  <div style="padding:0 16px" id="lowStockBanner"></div>
+  <div style="padding:8px 16px 0" id="lowStockBanner"></div>
   <div style="padding:0 16px" id="debtDueBanner"></div>
+  <!-- دوگمەی مۆبایل -->
+  <button class="mobile-menu-fab" onclick="openSidebar()">☰</button>
 
   <!-- ====== DASHBOARD ====== -->
   <div class="page active" id="pg-dashboard">
+
+    <!-- ئامارە سەرەکیەکان -->
     <div class="sgrid" id="dashStats"></div>
 
-    <!-- ڕێزی یەکەم: قازانجی مانگانە + دابەشکردنی خەرجی -->
-    <div class="grid-2">
-      <div class="card">
-        <div class="ctitle">📈 قازانجی ٦ مانگی ڕابردوو
-          <div class="ca" id="chartRangeBtns">
-            <button class="range-btn active" style="padding:3px 9px;font-size:10px" onclick="setChartRange(6,this)">٦م</button>
-            <button class="range-btn" style="padding:3px 9px;font-size:10px" onclick="setChartRange(12,this)">١٢م</button>
-          </div>
-        </div>
-        <div style="position:relative;height:180px"><canvas id="chartProfit"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">🥧 دابەشکردنی خەرجی</div>
-        <div style="position:relative;height:180px;display:flex;align-items:center;justify-content:center">
-          <canvas id="chartCost"></canvas>
-        </div>
-        <div id="chartCostLegend" style="margin-top:8px"></div>
-      </div>
+    <!-- دوگمەی خێرا -->
+    <div class="dash-quick-actions">
+      <button class="dqa-btn dqa-sell" onclick="showPage('products')">💰 فرۆشتن</button>
+      <button class="dqa-btn dqa-load" onclick="showPage('products')">📥 بارکردن</button>
+      <button class="dqa-btn dqa-add"  onclick="showPage('addProduct')">➕ کاڵای نوێ</button>
     </div>
 
-    <!-- ڕێزی دووەم: قازانجی مانگە + قەرز -->
+    <!-- قازانجی مانگانە + قەرز -->
     <div class="grid-2">
       <div class="card">
-        <div class="ctitle">📅 قازانجی ئەم مانگە</div>
+        <div class="ctitle">📅 ئەم مانگە</div>
         <div id="dashMonthProfit"></div>
       </div>
       <div class="card">
@@ -90,26 +72,61 @@
       </div>
     </div>
 
+    <!-- چارتی قازانجی مانگانە -->
+    <div class="card">
+      <div class="ctitle">📈 قازانج
+        <div class="ca" id="chartRangeBtns">
+          <button class="range-btn active" style="padding:3px 9px;font-size:10px" onclick="setChartRange(6,this)">٦م</button>
+          <button class="range-btn" style="padding:3px 9px;font-size:10px" onclick="setChartRange(12,this)">١٢م</button>
+        </div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="chartProfit"></canvas></div>
+    </div>
+
     <!-- باشترین کاڵاکان -->
     <div class="card">
-      <div class="ctitle">📦 باشترین کاڵاکان بەپێی قازانج
-        <div class="ca"><button class="btn btn-ol btn-sm" onclick="showPage('products')">هەموو ببینە</button></div>
+      <div class="ctitle">🏆 باشترین کاڵاکان
+        <div class="ca"><button class="btn btn-ol btn-sm" onclick="showPage('products')">هەموو</button></div>
       </div>
-      <div style="position:relative;height:220px"><canvas id="chartTopProds"></canvas></div>
-      <div id="dashTopProds" style="display:none"></div>
+      <div id="dashTopProds"></div>
+      <canvas id="chartTopProds" style="display:none"></canvas>
+      <canvas id="chartCost"     style="display:none"></canvas>
+      <div id="chartCostLegend"  style="display:none"></div>
     </div>
+
   </div>
 
   <!-- ====== PRODUCTS LIST ====== -->
   <div class="page" id="pg-products">
     <div id="prodsAlert"></div>
-    <div style="margin-bottom:12px;position:relative">
-      <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:15px">🔍</span>
-      <input type="search" placeholder="گەڕان بەدوای کاڵا یان فرۆشیار..."
-        oninput="searchProducts(this.value)"
-        style="width:100%;padding:10px 40px 10px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;color:var(--text);transition:border-color .2s;outline:none"
-        onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'">
+
+    <!-- سەرچاوان + فلتەر -->
+    <div class="prod-toolbar">
+      <div class="prod-search-wrap">
+        <span class="prod-search-ico">🔍</span>
+        <input type="search" id="prodSearchInput" placeholder="گەڕان..."
+          oninput="searchProducts(this.value)"
+          class="prod-search-input">
+      </div>
+      <div class="prod-filters">
+        <select id="filterSort" onchange="applyFilters()" class="filter-sel">
+          <option value="date_desc">🕐 نوێترین</option>
+          <option value="profit_desc">📈 قازانج</option>
+          <option value="qty_asc">📦 ستۆک کەم</option>
+          <option value="name_asc">🔤 ناو</option>
+        </select>
+        <select id="filterSupplier" onchange="applyFilters()" class="filter-sel">
+          <option value="">🏪 هەموو</option>
+        </select>
+        <select id="filterDebt" onchange="applyFilters()" class="filter-sel">
+          <option value="">💳 هەموو</option>
+          <option value="has_debt">⚠️ قەرزدار</option>
+          <option value="no_debt">✅ بێ قەرز</option>
+        </select>
+      </div>
+      <div class="prod-filter-count" id="filterCount"></div>
     </div>
+
     <div id="prodsList"></div>
   </div>
 
@@ -119,8 +136,8 @@
       <div class="ctitle">➕ زیادکردنی کاڵای نوێ</div>
       <div id="addProdAlert"></div>
       <div class="fg2">
-        <div class="fg c2"><label>ناوی کاڵا *</label><input id="apName" placeholder="بۆ نمونە: گەنم..."></div>
-        <div class="fg"><label>بڕ *</label><input id="apQty" type="number" step="0.001" placeholder="0" min="0" oninput="apCalc()"></div>
+        <div class="fg c2"><label>ناوی کاڵا *</label><input id="apName" placeholder="بۆ نمونە: ئایفۆن ١٥، تەختەی سیمان..."></div>
+        <div class="fg"><label>بڕ *</label><input id="apQty" type="number" step="0.001" placeholder="0" min="0" inputmode="decimal" oninput="apCalc()"></div>
         <div class="fg"><label>یەکەی پێوانە</label>
           <select id="apUnit">
             <option value="دانە">دانە</option>
@@ -132,14 +149,38 @@
             <option value="کارتۆن">کارتۆن</option>
           </select>
         </div>
-        <div class="fg"><label>کۆی نرخی کڕین</label><input id="apBuyPrice" type="number" step="0.01" placeholder="0.00" oninput="apCalc()"></div>
-        <div class="fg"><label>دراوی نرخ</label>
-          <select id="apBuyCurrency" class="curr-select" onchange="apCalc()"></select>
+      </div>
+
+      <!-- نرخی کڕین -->
+      <div class="fg2" style="margin-bottom:4px">
+        <div class="fg"><label>کۆی نرخ</label>
+          <input id="apBuyPrice" type="number" step="0.01" placeholder="0.00" inputmode="decimal" oninput="apCalc()">
         </div>
+        <div class="fg"><label>دراو</label>
+          <select id="apBuyCurrency" onchange="apCurrChange()">
+            <option value="USD" selected>🇺🇸 USD</option>
+            <option value="IQD">🇮🇶 IQD</option>
+            <option value="TRY">🇹🇷 TRY</option>
+            <option value="EUR">🇪🇺 EUR</option>
+            <option value="IRR">🇮🇷 IRR</option>
+            <option value="SAR">🇸🇦 SAR</option>
+            <option value="CNY">🇨🇳 CNY</option>
+          </select>
+        </div>
+      </div>
+      <div id="apDualBox"></div>
+
+      <div class="fg2">
         <div class="fg"><label>فرۆشیار</label>
           <select id="apSupplier"><option value="">— بەبێ فرۆشیار —</option></select>
         </div>
         <div class="fg"><label>بەروار</label><input id="apDate" type="date"></div>
+        <div class="fg"><label>🧾 ڕەسید</label>
+          <input id="apRaseed" type="number" step="0.01" placeholder="0.00" inputmode="decimal" oninput="apCalc()">
+        </div>
+        <div class="fg"><label>💼 عومولە</label>
+          <input id="apOmola" type="number" step="0.01" placeholder="0.00" inputmode="decimal" oninput="apCalc()">
+        </div>
         <div class="fg c2"><label>تێبینی</label><input id="apNote" placeholder="..."></div>
       </div>
       <div id="apPreview" class="mt8"></div>
