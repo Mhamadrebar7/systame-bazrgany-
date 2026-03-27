@@ -16,6 +16,8 @@ const PAGE_TITLES = {
 let currentRange    = 'month';
 let currentRangeFrom = '', currentRangeTo = '';
 let searchTimeout   = null;
+let currentPage     = 1;
+const PAGE_SIZE     = 20;
 
 // ===== HELPERS =====
 function el(id)  { return document.getElementById(id); }
@@ -24,8 +26,16 @@ function fv(id)  { return parseFloat((v(id)||'').replace(/,/g,'')) || 0; }
 
 function showA(cid, type, msg) {
   const e = el(cid); if (!e) return;
-  e.innerHTML = `<div class="alert al-${type}">${msg}</div>`;
-  if (type !== 'bad') setTimeout(() => { e.innerHTML = ''; }, 4000);
+  if (type === 'bad') {
+    // هەڵەکان خۆیان نامرێنەوە — دوگمەی داخستن هەیە
+    e.innerHTML = `<div class="alert al-${type}" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <span>${msg}</span>
+      <button onclick="this.closest('.alert').parentElement.innerHTML=''" style="background:none;border:none;cursor:pointer;color:inherit;opacity:.6;font-size:14px;padding:0;flex-shrink:0">✕</button>
+    </div>`;
+  } else {
+    e.innerHTML = `<div class="alert al-${type}">${msg}</div>`;
+    setTimeout(() => { e.innerHTML = ''; }, 4000);
+  }
 }
 
 function getDueBadgeClass(dueDate) {
@@ -102,7 +112,7 @@ function renderLowStockBanner() {
   const b = el('lowStockBanner'); if (!b) return;
   if (!low.length) { b.innerHTML = ''; return; }
   b.innerHTML = `<div class="stock-alert" onclick="showPage('products')">
-    ⚠️ ${low.length} کاڵا ستۆکی کەمیان هەیە: ${low.map(p => `<strong>${p.name}</strong> (${p.qty} ${p.unit})`).join('، ')}
+    ⚠️ ${low.length} کاڵا ستۆکی کەمیان هەیە: ${low.map(p => `<strong>${escHtml(p.name)}</strong> (${escHtml(p.qty)} ${escHtml(p.unit)})`).join('، ')}
   </div>`;
 }
 
@@ -122,7 +132,7 @@ function renderDebtDueBanner() {
       <div class="ddb-body">
         <div class="ddb-title">${overdues.length} قەرزار بەرواری دابینی تێپەڕیوە!</div>
         <div class="ddb-names">${overdues.map(a =>
-          `<span class="ddb-name">${a.name} · ${fmtC(a.owedUSD,'USD')}</span>`
+          `<span class="ddb-name">${escHtml(a.name)} · ${fmtC(a.owedUSD,'USD')}</span>`
         ).join('')}</div>
       </div>
     </div>`;
@@ -133,7 +143,7 @@ function renderDebtDueBanner() {
       <div class="ddb-body">
         <div class="ddb-title">${soons.length} قەرزار بەرواری کۆتاییان نزیکە (ناو ٧ ڕۆژ)</div>
         <div class="ddb-names">${soons.map(a =>
-          `<span class="ddb-name">${a.name} · ${a.diffDays === 0 ? 'ئەمڕۆ!' : a.diffDays + ' ڕۆژ'}</span>`
+          `<span class="ddb-name">${escHtml(a.name)} · ${a.diffDays === 0 ? 'ئەمڕۆ!' : a.diffDays + ' ڕۆژ'}</span>`
         ).join('')}</div>
       </div>
     </div>`;
@@ -206,8 +216,8 @@ function renderDash() {
         return `<div style="padding:9px 0;border-bottom:1px solid var(--border)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <div>
-              <div style="font-size:13px;font-weight:600">${d.name}</div>
-              <div style="font-size:11px;color:var(--muted)">${d.phone?`📞 <a href="tel:${d.phone}" style="color:var(--primary);text-decoration:none">${d.phone}</a> · `:''}${[...d.products].join('، ')}</div>
+              <div style="font-size:13px;font-weight:600">${escHtml(d.name)}</div>
+              <div style="font-size:11px;color:var(--muted)">${d.phone?`📞 <a href="tel:${escHtml(d.phone)}" style="color:var(--primary);text-decoration:none">${escHtml(d.phone)}</a> · `:''}${[...d.products].map(n=>escHtml(n)).join('، ')}</div>
             </div>
             <span class="tbad fw8">${fmtC(d.totalUSD,'USD')}</span>
           </div>
@@ -229,8 +239,8 @@ function renderDash() {
             <div style="display:flex;align-items:center;gap:8px">
               <span style="width:20px;height:20px;border-radius:50%;background:${isPos?'var(--ok-bg)':'var(--bad-bg)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:${isPos?'var(--ok)':'var(--bad)'};flex-shrink:0">${i+1}</span>
               <div>
-                <div style="font-size:13px;font-weight:700">${p.name}</div>
-                <div style="font-size:10px;color:var(--muted)">${fmtN(p.qty,2)} ${p.unit} مانەوە</div>
+                <div style="font-size:13px;font-weight:700">${escHtml(p.name)}</div>
+                <div style="font-size:10px;color:var(--muted)">${fmtN(p.qty,2)} ${escHtml(p.unit)} مانەوە</div>
               </div>
             </div>
             <span class="${isPos?'tok':'tbad'} fw8" style="font-size:12px">${fmtC(p.profitUSD,'USD')}</span>
@@ -563,11 +573,19 @@ function applyFilters() {
 
   if (term) prods = prods.filter(p => p.name.toLowerCase().includes(term) || (p.supplier||'').toLowerCase().includes(term));
   if (supp) prods = prods.filter(p => p.supplier === supp);
-  if (debt === 'has_debt') prods = prods.filter(p => getProductStats(p.id).debtRemainUSD > 0.001);
-  if (debt === 'no_debt')  prods = prods.filter(p => getProductStats(p.id).debtRemainUSD <= 0.001);
+
+  // پێش-حیسابکردنی ئامار بۆ فلتەر و ڕیزکردن (یەکجار)
+  const needStats = (debt || sort === 'profit_desc');
+  let statsMap = {};
+  if (needStats) {
+    prods.forEach(p => { statsMap[p.id] = getProductStats(p.id); });
+  }
+
+  if (debt === 'has_debt') prods = prods.filter(p => statsMap[p.id].debtRemainUSD > 0.001);
+  if (debt === 'no_debt')  prods = prods.filter(p => statsMap[p.id].debtRemainUSD <= 0.001);
 
   if (sort === 'name_asc')      prods.sort((a,b)=>a.name.localeCompare(b.name));
-  else if (sort === 'profit_desc') prods.sort((a,b)=>getProductStats(b.id).profitUSD - getProductStats(a.id).profitUSD);
+  else if (sort === 'profit_desc') prods.sort((a,b)=>statsMap[b.id].profitUSD - statsMap[a.id].profitUSD);
   else if (sort === 'qty_asc')  prods.sort((a,b)=>parseFloat(a.qty)-parseFloat(b.qty));
   else prods.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1);
 
@@ -580,6 +598,7 @@ function applyFilters() {
 
 function searchProducts(q) {
   currentSearch = q;
+  currentPage = 1;
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => applyFilters(), 200);
 }
@@ -590,7 +609,28 @@ function renderProductsList(prods) {
       <button class="btn btn-p mt8" onclick="showPage('addProduct')">➕ کاڵای نوێ</button></div>`;
     return;
   }
-  el('prodsList').innerHTML = prods.map(p => renderProdCard(p)).join('');
+  const totalPages = Math.ceil(prods.length / PAGE_SIZE);
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageProds = prods.slice(start, start + PAGE_SIZE);
+
+  let paginationHTML = '';
+  if (totalPages > 1) {
+    paginationHTML = `<div class="pagination">
+      <button class="pg-btn" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>‹</button>
+      <span class="pg-info">${currentPage} لە ${totalPages}</span>
+      <button class="pg-btn" onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>›</button>
+    </div>`;
+  }
+
+  el('prodsList').innerHTML = pageProds.map(p => renderProdCard(p)).join('') + paginationHTML;
+}
+
+function goPage(n) {
+  currentPage = n;
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 
@@ -614,14 +654,15 @@ function renderProdCard(p) {
   return `<div class="${cardClass}" id="pcard-${p.id}">
     <div class="pcs-row">
       <div class="pcs-left" onclick="toggleProd(${p.id})">
-        <div class="pcs-name">${p.name}${hasDebt ? ` <span class="pcs-badge pcs-warn" style="font-size:8px;padding:1px 5px">💳</span>` : ''}</div>
-        <div class="pcs-sub">${p.supplier || 'بێ فرۆشیار'}</div>
+        <div class="pcs-name">${escHtml(p.name)}${hasDebt ? ` <span class="pcs-badge pcs-warn" style="font-size:8px;padding:1px 5px">💳</span>` : ''}</div>
+        <div class="pcs-sub">${escHtml(p.supplier) || 'بێ فرۆشیار'}</div>
       </div>
       <div class="pcs-right">
         ${stockBadge}
         ${profitBadge}
         <button class="pcs-btn pcs-sell" onclick="quickOpenTab(${p.id},'sell')" title="فرۆشتن">💰</button>
         <button class="pcs-btn pcs-load" onclick="quickOpenTab(${p.id},'load')" title="بارکردن">📥</button>
+        <button class="pcs-btn" onclick="openEditProduct(${p.id})" title="دەستکاری" style="background:rgba(251,191,36,.15)">✏️</button>
         <button class="pcs-btn pcs-more" onclick="toggleProd(${p.id})" title="زیاتر">⋯</button>
       </div>
     </div>
@@ -773,7 +814,7 @@ function renderProdLoad(id, p, s) {
 
       <div class="fg2" style="margin-top:8px">
         <div class="fg"><label>بڕ</label><input id="ev-qty-${id}" type="number" step="0.001" placeholder="0" min="0" inputmode="decimal" oninput="evCalcLoad(${id})"></div>
-        <div class="fg"><label>فرۆشیار</label><input id="ev-supp-${id}" placeholder="ناوی فرۆشیار..." value="${p.supplier||''}"></div>
+        <div class="fg"><label>فرۆشیار</label><input id="ev-supp-${id}" placeholder="ناوی فرۆشیار..." value="${escHtml(p.supplier||'')}"></div>
         <div class="fg"><label>بەروار</label><input id="ev-date-${id}" type="date" value="${today()}"></div>
         <div class="fg c2"><label>تێبینی</label><input id="ev-note-${id}" placeholder="..."></div>
       </div>
@@ -905,7 +946,7 @@ function renderProdCosts(id, p, s) {
         <div class="ev-list">${ships.length ? ships.slice().reverse().map(ev=>`
           <div class="ev-item">
             <div class="ev-icon">🚚</div>
-            <div class="ev-info"><div class="ev-title">کرێی بار</div><div class="ev-meta">${ev.date}${ev.rateSnapshot&&ev.currency!=='USD'?' · 1$='+fmtN(ev.rateSnapshot,0)+' '+ev.currency:''}${ev.note?' · '+ev.note:''}</div></div>
+            <div class="ev-info"><div class="ev-title">کرێی بار</div><div class="ev-meta">${ev.date}${ev.rateSnapshot&&ev.currency!=='USD'?' · 1$='+fmtN(ev.rateSnapshot,0)+' '+ev.currency:''}${ev.note?' · '+escHtml(ev.note):''}</div></div>
             <div style="text-align:left">
               <div class="tbad fw8" style="font-size:12px">${fmtC(ev.amount,ev.currency)}</div>
               ${ev.currency!=='USD'?`<div style="font-size:10px;color:var(--ok)">≈ ${fmtC(ev.amount/(ev.rateSnapshot||1),'USD')}</div>`:''}
@@ -927,7 +968,7 @@ function renderProdCosts(id, p, s) {
         <div class="ev-list">${taxes.length ? taxes.slice().reverse().map(ev=>`
           <div class="ev-item">
             <div class="ev-icon">🏛️</div>
-            <div class="ev-info"><div class="ev-title">باج${ev.note?' — '+ev.note:''}</div><div class="ev-meta">${ev.date}${ev.rateSnapshot&&ev.currency!=='USD'?' · 1$='+fmtN(ev.rateSnapshot,0)+' '+ev.currency:''}</div></div>
+            <div class="ev-info"><div class="ev-title">باج${ev.note?' — '+escHtml(ev.note):''}</div><div class="ev-meta">${ev.date}${ev.rateSnapshot&&ev.currency!=='USD'?' · 1$='+fmtN(ev.rateSnapshot,0)+' '+ev.currency:''}</div></div>
             <div style="text-align:left">
               <div class="tbad fw8" style="font-size:12px">${fmtC(ev.amount,ev.currency)}</div>
               ${ev.currency!=='USD'?`<div style="font-size:10px;color:var(--ok)">≈ ${fmtC(ev.amount/(ev.rateSnapshot||1),'USD')}</div>`:''}
@@ -1066,7 +1107,7 @@ function renderExtraSection(id, type, title, icon, events) {
     <div class="ev-list">${events.length ? events.slice().reverse().map(ev=>`
       <div class="ev-item">
         <div class="ev-icon">${icon}</div>
-        <div class="ev-info"><div class="ev-title">${title}${ev.note?' — '+ev.note:''}</div>
+        <div class="ev-info"><div class="ev-title">${title}${ev.note?' — '+escHtml(ev.note):''}</div>
           <div class="ev-meta">${ev.date}${ev.rateSnapshot&&ev.currency!=='USD'?' · 1$='+fmtN(ev.rateSnapshot,0)+' '+ev.currency:''}</div>
         </div>
         <div style="text-align:left">
@@ -1101,8 +1142,8 @@ function renderProdSell(id, p, s) {
     ? `<div style="margin-bottom:10px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:5px">👆 کڕیاری پێشتر:</div>
         <div style="display:flex;flex-wrap:wrap;gap:5px">
-          ${prevCustomers.map(c=>`<button type="button" class="btn btn-xs btn-g" onclick="fillSellCustomer(${id},'${c.name.replace(/'/g,"\\'")}','${c.phone}')">
-            ${c.name}${c.phone?' · '+c.phone:''}
+          ${prevCustomers.map((c,ci)=>`<button type="button" class="btn btn-xs btn-g" data-cname="${escHtml(c.name)}" data-cphone="${escHtml(c.phone)}" onclick="fillSellCustomer(${id},this.dataset.cname,this.dataset.cphone)">
+            ${escHtml(c.name)}${c.phone?' · '+escHtml(c.phone):''}
           </button>`).join('')}
         </div>
       </div>` : '';
@@ -1169,7 +1210,7 @@ function renderProdSell(id, p, s) {
           <div class="ev-title">
             <span style="color:var(--ok);font-weight:800">${fmtN(ev.qty,2)} ${p.unit}</span>
             <span style="color:var(--muted);font-weight:400;font-size:11px"> × ${fmtC(ev.unitPrice,curr)}</span>
-            ${ev.buyer?' · '+ev.buyer:''}${ev.phone?' · 📞'+ev.phone:''}
+            ${ev.buyer?' · '+escHtml(ev.buyer):''}${ev.phone?' · 📞'+escHtml(ev.phone):''}
           </div>
           <div class="ev-meta">
             ${ev.date}
@@ -1301,8 +1342,8 @@ function renderProdDebt(id, p, s) {
     return `<div style="background:var(--bg);border:1px solid rgba(248,113,113,.25);border-radius:var(--rs);padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:700">${d.name}</div>
-          ${d.phone?`<div style="font-size:11px;color:var(--muted)">📞 ${d.phone}</div>`:''}
+          <div style="font-size:13px;font-weight:700">${escHtml(d.name)}</div>
+          ${d.phone?`<div style="font-size:11px;color:var(--muted)">📞 ${escHtml(d.phone)}</div>`:''}
         </div>
         <span class="tbad fw8">${fmtC(d.owed,'USD')}</span>
       </div>
@@ -1334,8 +1375,8 @@ function renderProdDebt(id, p, s) {
       ${debtors.length ? `<div style="margin-bottom:10px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">👆 کڕیار هەڵبژێرە:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${debtors.map(d=>`<button type="button" class="btn btn-g btn-sm" onclick="fillDebtPay(${id},'${d.name.replace(/'/g,"\\'")}','${d.phone}')">
-            ${d.name}${d.phone?' · '+d.phone:''} <span class="tbad">(${fmtC(d.owed,'USD')})</span>
+          ${debtors.map(d=>`<button type="button" class="btn btn-g btn-sm" data-dname="${escHtml(d.name)}" data-dphone="${escHtml(d.phone)}" onclick="fillDebtPay(${id},this.dataset.dname,this.dataset.dphone)">
+            ${escHtml(d.name)}${d.phone?' · '+escHtml(d.phone):''} <span class="tbad">(${fmtC(d.owed,'USD')})</span>
           </button>`).join('')}
         </div>
       </div>` : ''}
@@ -1353,8 +1394,8 @@ function renderProdDebt(id, p, s) {
       <div class="ev-item">
         <div class="ev-icon">✅</div>
         <div class="ev-info">
-          <div class="ev-title">${ev.buyer||'—'}</div>
-          <div class="ev-meta">${ev.date}${ev.phone?' · 📞 <a href="tel:'+ev.phone+'" style="color:var(--primary);text-decoration:none">'+ev.phone+'</a>':''}</div>
+          <div class="ev-title">${escHtml(ev.buyer)||'—'}</div>
+          <div class="ev-meta">${ev.date}${ev.phone?' · 📞 <a href="tel:'+escHtml(ev.phone)+'" style="color:var(--primary);text-decoration:none">'+escHtml(ev.phone)+'</a>':''}</div>
         </div>
         <div class="ev-amount tok">${fmtC(ev.amount,ev.currency)}</div>
         <button class="btn btn-bad btn-xs" onclick="delEvAndRefresh(${ev.id},${id},'debt')">🗑️</button>
@@ -1417,8 +1458,8 @@ function renderProdHistory(id, p, s) {
               <span class="hist-lbl">کۆی نرخ</span>
               <span class="hist-val bad">${fmtC(ev.totalPrice,curr)}${curr!=='USD'?` <small>(≈ ${fmtC(usd,'USD')})</small>`:''}</span>
             </div>
-            ${ev.supplier?`<div class="hist-row"><span class="hist-lbl">فرۆشیار</span><span class="hist-val">${ev.supplier}</span></div>`:''}
-            ${rateTag}${ev.note?`<span class="hist-tag">${ev.note}</span>`:''}
+            ${ev.supplier?`<div class="hist-row"><span class="hist-lbl">فرۆشیار</span><span class="hist-val">${escHtml(ev.supplier)}</span></div>`:''}
+            ${rateTag}${ev.note?`<span class="hist-tag">${escHtml(ev.note)}</span>`:''}
           </div>
           <button class="btn btn-bad btn-xs hist-del" onclick="delEvAndRefresh(${ev.id},${id},'history')">🗑️</button>
         </div>`;
@@ -1448,9 +1489,9 @@ function renderProdHistory(id, p, s) {
               <span class="hist-lbl">کۆی پارە</span>
               <span class="hist-val" style="color:${typeClr}">${fmtC(ev.totalPrice,curr)}${curr!=='USD'?` <small>(≈ ${fmtC(usd,'USD')})</small>`:''}</span>
             </div>
-            ${ev.buyer?`<div class="hist-row"><span class="hist-lbl">کڕیار</span><span class="hist-val">${ev.buyer}${ev.phone?' · 📞'+ev.phone:''}</span></div>`:''}
+            ${ev.buyer?`<div class="hist-row"><span class="hist-lbl">کڕیار</span><span class="hist-val">${escHtml(ev.buyer)}${ev.phone?' · 📞'+escHtml(ev.phone):''}</span></div>`:''}
             ${ev.dueDate?`<div class="hist-row"><span class="hist-lbl">کۆتایی قەرز</span><span class="hist-val warn">${ev.dueDate}</span></div>`:''}
-            ${rateTag}${ev.note?`<span class="hist-tag">${ev.note}</span>`:''}
+            ${rateTag}${ev.note?`<span class="hist-tag">${escHtml(ev.note)}</span>`:''}
           </div>
           <button class="btn btn-bad btn-xs hist-del" onclick="delEvAndRefresh(${ev.id},${id},'history')">🗑️</button>
         </div>`;
@@ -1473,7 +1514,7 @@ function renderProdHistory(id, p, s) {
               <span class="hist-lbl">بڕ</span>
               <span class="hist-val bad">${fmtC(ev.amount,curr)}${curr!=='USD'?` <small>(≈ ${fmtC(usd,'USD')})</small>`:''}</span>
             </div>
-            ${rateTag}${ev.note?`<span class="hist-tag">${ev.note}</span>`:''}
+            ${rateTag}${ev.note?`<span class="hist-tag">${escHtml(ev.note)}</span>`:''}
           </div>
           <button class="btn btn-bad btn-xs hist-del" onclick="delEvAndRefresh(${ev.id},${id},'history')">🗑️</button>
         </div>`;
@@ -1493,7 +1534,7 @@ function renderProdHistory(id, p, s) {
               <span class="hist-lbl">بڕ</span>
               <span class="hist-val ok">${fmtDual(ev.amount,curr,rate)}</span>
             </div>
-            ${ev.buyer?`<div class="hist-row"><span class="hist-lbl">قەرزار</span><span class="hist-val">${ev.buyer}${ev.phone?' · 📞'+ev.phone:''}</span></div>`:''}
+            ${ev.buyer?`<div class="hist-row"><span class="hist-lbl">قەرزار</span><span class="hist-val">${escHtml(ev.buyer)}${ev.phone?' · 📞'+escHtml(ev.phone):''}</span></div>`:''}
           </div>
           <button class="btn btn-bad btn-xs hist-del" onclick="delEvAndRefresh(${ev.id},${id},'history')">🗑️</button>
         </div>`;
@@ -1527,7 +1568,7 @@ function printProduct(id) {
   const p = getProduct(id);
   const s = getProductStats(id);
   const win = window.open('', '_blank');
-  win.document.write(buildPrintHTML([{ p, s }], `ڕاپۆرتی کاڵا: ${p.name}`));
+  win.document.write(buildPrintHTML([{ p, s }], `ڕاپۆرتی کاڵا: ${escHtml(p.name)}`));
   win.document.close();
   win.print();
 }
@@ -1572,7 +1613,7 @@ function buildPrintHTML(items, title) {
   }
 
   items.forEach(({ p, s }) => {
-    body += `<h2>📦 ${p.name}</h2>
+    body += `<h2>📦 ${escHtml(p.name)}</h2>
     <div class="sum">
       <div class="sum-row"><span>خەرجی کڕین</span><span class="bad">${fmtC(s.loadCostUSD,'USD')}</span></div>
       <div class="sum-row"><span>کرێی بار</span><span class="bad">${fmtC(s.shippingUSD,'USD')}</span></div>
@@ -1592,9 +1633,9 @@ function buildPrintHTML(items, title) {
         <tr>
           <td>${{load:'📥 بار',shipping:'🚚 کرێ',tax:'🏛️ باج',raseed:'🧾 ڕەسید',omola:'💼 عومولە',sell_cash:'💵 نەقد',sell_debt:'📝 قەرز',debt_pay:'✅ پارەدانەوە'}[ev.type]||ev.type}</td>
           <td>${ev.date||''}</td>
-          <td>${ev.qty!=null?fmtN(ev.qty,2)+' '+p.unit:'-'}</td>
+          <td>${ev.qty!=null?fmtN(ev.qty,2)+' '+escHtml(p.unit):'-'}</td>
           <td>${ev.totalPrice!=null?fmtC(ev.totalPrice,ev.currency):ev.amount!=null?fmtC(ev.amount,ev.currency):'-'}</td>
-          <td>${ev.note||ev.buyer||ev.supplier||''}</td>
+          <td>${escHtml(ev.note||ev.buyer||ev.supplier||'')}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -1693,7 +1734,7 @@ function renderProfits() {
         <tbody>${prods.map(p => {
           const ps = getProductStats(p.id);
           return `<tr>
-            <td><strong>${p.name}</strong></td>
+            <td><strong>${escHtml(p.name)}</strong></td>
             <td class="tok">${fmtC(ps.totalRevenueUSD,'USD')}</td>
             <td class="tbad">${fmtC(ps.totalCostUSD,'USD')}</td>
             <td><span class="badge ${ps.profitUSD>=0?'b-ok':'b-bad'}">${fmtC(ps.profitUSD,'USD')}</span></td>
@@ -1753,8 +1794,13 @@ async function fetchLiveRates() {
   try {
     let data = null;
     try { const r = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'); if(r.ok) data=await r.json(); } catch(_){}
-    if (!data) { const r = await fetch('https://latest.currency-api.pages.dev/v1/currencies/usd.json'); if(r.ok) data=await r.json(); }
-    if (!data||!data.usd) throw new Error('داتا نەگەیشت');
+    if (!data) {
+      try {
+        const r2 = await fetch('https://latest.currency-api.pages.dev/v1/currencies/usd.json');
+        if (r2.ok) { const d2 = await r2.json(); if (d2?.usd) data = d2; }
+      } catch(_) {}
+    }
+    if (!data?.usd) throw new Error('نرخەکان نەگەیشتن — ئینتەرنێتەکەت پشکنە');
     const rates = data.usd; let updated=0;
     const list = getCurrencies();
     list.forEach(c=>{ if(c.code==='USD') return; const k=c.code.toLowerCase(); if(rates[k]){ c.rateToUSD=parseFloat(rates[k].toFixed(4)); updated++; } });
@@ -1777,10 +1823,10 @@ function renderSuppliers() {
         <div class="ev-item">
           <div class="ev-icon">🏪</div>
           <div class="ev-info">
-            <div class="ev-title">${s.name}</div>
-            ${s.phone?`<div class="ev-meta">📞 <a href="tel:${s.phone}" style="color:var(--primary);text-decoration:none">${s.phone}</a></div>`:''}
+            <div class="ev-title">${escHtml(s.name)}</div>
+            ${s.phone?`<div class="ev-meta">📞 <a href="tel:${escHtml(s.phone)}" style="color:var(--primary);text-decoration:none">${escHtml(s.phone)}</a></div>`:''}
           </div>
-          ${s.phone?`<a href="tel:${s.phone}" class="btn btn-ol btn-xs">📞</a>`:''}
+          ${s.phone?`<a href="tel:${escHtml(s.phone)}" class="btn btn-ol btn-xs">📞</a>`:''}
           <button class="btn btn-bad btn-xs" onclick="delSupplier(${s.id})">🗑️</button>
         </div>`).join('')}</div>`
     : `<div class="empty">هیچ فرۆشیارێک نییە</div>`;
@@ -1873,9 +1919,9 @@ function renderCustomers() {
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:14px;flex-shrink:0">' + (i+1) + '</div>' +
           '<div>' +
-            '<div style="font-weight:700;font-size:14px">' + c.name + '</div>' +
-            '<div style="font-size:11px;color:var(--muted)">📞 <a href="tel:' + c.phone + '" style="color:var(--primary);text-decoration:none">' + c.phone + '</a> · ' + c.txCount + ' مامەڵە</div>' +
-            '<div style="font-size:10px;color:var(--faint);margin-top:2px">' + c.products.slice(0,3).join('، ') + (c.products.length>3?' ...':'') + '</div>' +
+            '<div style="font-weight:700;font-size:14px">' + escHtml(c.name) + '</div>' +
+            '<div style="font-size:11px;color:var(--muted)">📞 <a href="tel:' + escHtml(c.phone) + '" style="color:var(--primary);text-decoration:none">' + escHtml(c.phone) + '</a> · ' + c.txCount + ' مامەڵە</div>' +
+            '<div style="font-size:10px;color:var(--faint);margin-top:2px">' + c.products.slice(0,3).map(n=>escHtml(n)).join('، ') + (c.products.length>3?' ...':'') + '</div>' +
           '</div>' +
         '</div>' +
         '<div style="text-align:left">' +
@@ -1899,6 +1945,84 @@ function renderCustomers() {
       '<div class="scard ok"><div class="si">💰</div><div class="sv tok">' + fmtC(totalBought,'USD') + '</div><div class="sl">کۆی کڕین</div><div class="sd">' + fmtC(totalBought,'USD') + '</div></div>' +
       '<div class="scard ' + (totalDebt>0?'bad':'ok') + '"><div class="si">💳</div><div class="sv ' + (totalDebt>0?'tbad':'tok') + '">' + fmtC(totalDebt,'USD') + '</div><div class="sl">کۆی قەرز</div><div class="sd">' + fmtC(totalDebt,'USD') + '</div></div>' +
     '</div>' + rows;
+}
+
+
+// ===== دەستکاریکردنی کاڵا (مۆدال) =====
+function openEditProduct(id) {
+  if (typeof event !== 'undefined') event.stopPropagation();
+  const p = getProduct(id);
+  if (!p) return;
+  const suppOpts = getSuppliers().map(s =>
+    `<option value="${escHtml(s.name)}"${s.name===p.supplier?' selected':''}>${escHtml(s.name)}</option>`
+  ).join('');
+  const unitOpts = ['دانە','kg','g','متر','لیتر','بستە','کارتۆن'].map(u =>
+    `<option value="${u}"${u===p.unit?' selected':''}>${u}</option>`
+  ).join('');
+
+  // ساختاری مۆدال
+  let overlay = document.getElementById('editProdOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'editProdOverlay';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.add('open');
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>✏️ دەستکاریکردنی: ${escHtml(p.name)}</h3>
+        <button class="modal-close" onclick="closeEditProduct()">✕</button>
+      </div>
+      <div id="editProdAlert"></div>
+      <div class="fg2">
+        <div class="fg c2"><label>ناوی کاڵا *</label><input id="epName" value="${escHtml(p.name)}"></div>
+        <div class="fg"><label>بڕ</label><input id="epQty" type="number" step="0.001" value="${p.qty}" inputmode="decimal"></div>
+        <div class="fg"><label>یەکەی پێوانە</label>
+          <select id="epUnit">${unitOpts}</select>
+        </div>
+        <div class="fg"><label>فرۆشیار</label>
+          <select id="epSupplier">
+            <option value="">— بەبێ فرۆشیار —</option>
+            ${suppOpts}
+          </select>
+        </div>
+        <div class="fg c2"><label>تێبینی</label><input id="epNote" value="${escHtml(p.note||'')}"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-p" onclick="saveEditProduct(${id})">✅ پاشەکەوتکردن</button>
+        <button class="btn btn-g" onclick="closeEditProduct()">داخستن</button>
+        <button class="btn btn-bad" style="margin-right:auto" onclick="closeEditProduct();delProd(${id})">🗑️ سڕینەوە</button>
+      </div>
+    </div>`;
+
+  // داخستن بە کلیک لە دەرەوەی مۆدال
+  overlay.addEventListener('click', function handler(e) {
+    if (e.target === overlay) { closeEditProduct(); overlay.removeEventListener('click', handler); }
+  });
+}
+
+function saveEditProduct(id) {
+  const name = (el('epName')?.value || '').trim();
+  if (!name) return showA('editProdAlert', 'bad', 'ناوی کاڵا داخڵ بکە');
+  const qty  = parseFloat(el('epQty')?.value) || 0;
+  updateProduct(id, {
+    name,
+    qty,
+    unit: el('epUnit')?.value || 'دانە',
+    supplier: el('epSupplier')?.value || '',
+    note: el('epNote')?.value || '',
+  });
+  closeEditProduct();
+  // نوێکردنەوەی پەڕە
+  if (el('pg-products')?.classList.contains('active')) renderProducts();
+  else showPage('products');
+}
+
+function closeEditProduct() {
+  const overlay = document.getElementById('editProdOverlay');
+  if (overlay) overlay.classList.remove('open');
 }
 
 

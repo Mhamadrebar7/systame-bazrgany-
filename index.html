@@ -17,7 +17,7 @@
 <div class="sidebar">
   <div class="sb-logo">
     <div class="ico">📦</div>
-    <div style="flex:1"><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.1</small></div>
+    <div style="flex:1"><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.2</small></div>
     <button class="menu-btn sb-close-btn" onclick="closeSidebar()">✕</button>
   </div>
   <div class="nav-sec">
@@ -277,6 +277,22 @@
     <div id="settingsAlert"></div>
 
     <div class="card">
+      <div class="ctitle">📤 هاوردە و ناردنەوە</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <button class="btn btn-p" onclick="doExport()">💾 Export JSON (پشتیوانی)</button>
+        <label class="btn btn-ol" style="cursor:pointer">📥 Import JSON
+          <input type="file" accept=".json" onchange="doImport(this)" style="display:none">
+        </label>
+      </div>
+      <div class="ctitle" style="border:none;padding:0;margin-top:10px">📊 ڕاپۆرتەکان</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn btn-ok" onclick="exportToCSV()">📋 کاڵاکان (CSV)</button>
+        <button class="btn btn-ok" onclick="exportEventsToCSV()">📋 مامەڵەکان (CSV)</button>
+        <button class="btn btn-a" onclick="exportToPDF()">🖨️ ڕاپۆرتی PDF</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="ctitle" style="color:var(--bad)">⚠️ سڕینەوەی هەموو داتا</div>
       <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
         ئەم کاره هەموو کاڵا، مێژوو و دراوەکان دەسڕێتەوە. گەرانەوەی نییە!
@@ -287,7 +303,7 @@
     <div class="card">
       <div class="ctitle">ℹ️ دەربارەی</div>
       <p style="color:var(--muted);font-size:13px;line-height:2">
-        سیستەمی بەڕێوەبردنی کاڵا · نسخە ٢.١<br>
+        سیستەمی بەڕێوەبردنی کاڵا · نسخە ٢.٢<br>
         داتاکان لە بڕاوزەرەکەت پاشەکەوت دەبن (localStorage)
       </p>
     </div>
@@ -301,15 +317,37 @@
 <script src="app.js"></script>
 <script>
   // INIT
-  initData();
-  fillCurrencySelects();
-  fillSupplierSelect();
-  renderDash();
-  renderLowStockBanner();
-  renderDebtDueBanner();
+  try {
+    initData();
+    fillCurrencySelects();
+    fillSupplierSelect();
+    renderDash();
+    renderLowStockBanner();
+    renderDebtDueBanner();
+  } catch(e) {
+    console.error('Init failed:', e);
+    document.querySelector('.main').innerHTML =
+      '<div style="padding:2rem;text-align:center;direction:rtl">' +
+      '<div style="font-size:2rem;margin-bottom:1rem">⚠️</div>' +
+      '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#f87171">هەڵەی سیستەم</div>' +
+      '<div style="font-size:13px;color:#8896b3;margin-bottom:1.5rem">' + e.message + '</div>' +
+      '<button onclick="localStorage.clear();location.reload()" ' +
+      'style="padding:10px 24px;border-radius:8px;border:none;background:#f87171;color:#fff;font-size:14px;cursor:pointer;font-family:inherit">' +
+      '🗑️ ڕیسێت و دووبارەبارکردن</button></div>';
+  }
 
   // MODAL CLOSE
   document.addEventListener('keydown', e => { if(e.key==='Escape') closeSidebar(); });
+
+  // GLOBAL ERROR SAFETY NET — هەڵەی نەدیاریکراو
+  window.addEventListener('unhandledrejection', ev => {
+    console.error('Unhandled async error:', ev.reason);
+    const msg = ev.reason?.message || String(ev.reason) || 'هەڵەی نەزانراو';
+    showA('settingsAlert', 'bad', '⚠️ ' + msg);
+  });
+  window.onerror = (msg, src, line) => {
+    console.error('JS Error:', msg, '@', src + ':' + line);
+  };
 </script>
 </body>
 </html>

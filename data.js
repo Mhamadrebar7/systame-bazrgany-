@@ -2,9 +2,26 @@
 // data.js — سیستەمی داتا و localStorage
 // ============================================================
 
+// ===== XSS Protection =====
+function escHtml(str) {
+  if (str == null) return '';
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(str)));
+  return div.innerHTML;
+}
+
 const DB = {
   get: k => { try { return JSON.parse(localStorage.getItem('pm_' + k) || 'null'); } catch { return null; } },
-  set: (k, v) => localStorage.setItem('pm_' + k, JSON.stringify(v)),
+  set: (k, v) => {
+    try {
+      localStorage.setItem('pm_' + k, JSON.stringify(v));
+    } catch (e) {
+      // QuotaExceededError — بیرەکەی براوزەر پڕە
+      console.error('localStorage quota exceeded:', e);
+      alert('⚠️ بیرەکەی براوزەر پڕە! داتاکە پاشەکەوت نەکرا.\nتکایە داتای کۆنەکان Export بکە، پاشان ڕیسێت بکە.');
+      throw e;
+    }
+  },
   clear: () => { Object.keys(localStorage).filter(k => k.startsWith('pm_')).forEach(k => localStorage.removeItem(k)); }
 };
 
@@ -100,6 +117,21 @@ function addProduct(data) {
 
 function getProduct(id) { return getProducts().find(p => p.id == id); }
 
+// ===== دەستکاریکردنی کاڵا =====
+function updateProduct(id, data) {
+  const prods = getProducts();
+  const p = prods.find(x => x.id == id);
+  if (!p) return null;
+  if (data.name !== undefined)    p.name = data.name;
+  if (data.unit !== undefined)    p.unit = data.unit;
+  if (data.qty !== undefined)     p.qty = parseFloat(data.qty) || 0;
+  if (data.supplier !== undefined) p.supplier = data.supplier;
+  if (data.note !== undefined)    p.note = data.note;
+  saveProducts(prods);
+  invalidateStatsCache();
+  return p;
+}
+
 function updateProductQty(id, delta) {
   invalidateStatsCache();
   const prods = getProducts();
@@ -167,15 +199,32 @@ function getProductStats(productId) {
   let cashRevenueUSD = 0, debtRevenueUSD = 0, debtPaidUSD = 0, totalSoldQty = 0;
 
   events.forEach(ev => {
-    switch(ev.type) {
-      case 'load':      loadCostUSD  += toUSD(ev.totalPrice, ev.currency); totalLoadedQty += parseFloat(ev.qty) || 0; break;
-      case 'shipping':  shippingUSD  += toUSD(ev.amount, ev.currency); break;
-      case 'tax':       taxUSD       += toUSD(ev.amount, ev.currency); break;
-      case 'raseed':    raseedUSD    += toUSD(ev.amount, ev.currency); break;
-      case 'omola':     omolaUSD     += toUSD(ev.amount, ev.currency); break;
-      case 'sell_cash': cashRevenueUSD += toUSD(ev.totalPrice, ev.currency); totalSoldQty += parseFloat(ev.qty) || 0; break;
-      case 'sell_debt': debtRevenueUSD += toUSD(ev.totalPrice, ev.currency); totalSoldQty += parseFloat(ev.qty) || 0; break;
-      case 'debt_pay':  debtPaidUSD  += toUSD(ev.amount, ev.currency); break;
+    try {
+      if (!ev || !ev.type) return; // ئیڤێنتی خراپ نادیار بکە
+      switch(ev.type) {
+        case 'load':
+          if (ev.totalPrice == null || !ev.currency) break;
+          loadCostUSD  += toUSD(ev.totalPrice, ev.currency);
+          totalLoadedQty += parseFloat(ev.qty) || 0;
+          break;
+        case 'shipping':  if (ev.amount != null && ev.currency) shippingUSD  += toUSD(ev.amount, ev.currency); break;
+        case 'tax':       if (ev.amount != null && ev.currency) taxUSD       += toUSD(ev.amount, ev.currency); break;
+        case 'raseed':    if (ev.amount != null && ev.currency) raseedUSD    += toUSD(ev.amount, ev.currency); break;
+        case 'omola':     if (ev.amount != null && ev.currency) omolaUSD     += toUSD(ev.amount, ev.currency); break;
+        case 'sell_cash':
+          if (ev.totalPrice == null || !ev.currency) break;
+          cashRevenueUSD += toUSD(ev.totalPrice, ev.currency);
+          totalSoldQty += parseFloat(ev.qty) || 0;
+          break;
+        case 'sell_debt':
+          if (ev.totalPrice == null || !ev.currency) break;
+          debtRevenueUSD += toUSD(ev.totalPrice, ev.currency);
+          totalSoldQty += parseFloat(ev.qty) || 0;
+          break;
+        case 'debt_pay':  if (ev.amount != null && ev.currency) debtPaidUSD  += toUSD(ev.amount, ev.currency); break;
+      }
+    } catch(e) {
+      console.warn('ئیڤێنتی خراپ تێپەڕاندرا — id:', ev?.id, e);
     }
   });
 
@@ -249,10 +298,17 @@ function importData(file) {
     reader.onload = e => {
       try {
         const data = JSON.parse(e.target.result);
-        if (!data.products || !data.events) throw new Error('فایلەکە دروست نییە');
+        if (!Array.isArray(data.products) || !Array.isArray(data.events)) throw new Error('فایلەکە دروست نییە');
+        // پشکنینی کاڵاکان — هەر ئەوانەی id و ناوی هەیە پاشەکەوت بکە
+        const validProds = data.products.filter(p => p.id != null && typeof p.name === 'string' && p.qty != null);
+        const validEvs   = data.events.filter(e => e.id != null && e.type && e.productId != null);
+        const skippedP   = data.products.length - validProds.length;
+        const skippedE   = data.events.length - validEvs.length;
+        if (skippedP > 0) console.warn(`${skippedP} کاڵای خراپ لابرا`);
+        if (skippedE > 0) console.warn(`${skippedE} ئیڤێنتی خراپ لابرا`);
         if (data.currencies) saveCurrencies(data.currencies);
-        if (data.products)   DB.set('products', data.products);
-        if (data.events)     DB.set('events', data.events);
+        DB.set('products', validProds);
+        DB.set('events', validEvs);
         if (data.suppliers)  DB.set('suppliers', data.suppliers);
         resolve(data);
       } catch(err) { reject(err); }
@@ -261,7 +317,173 @@ function importData(file) {
   });
 }
 
+// ===== EXPORT بۆ CSV =====
+function exportToCSV() {
+  const prods = getProducts();
+  const BOM = '\uFEFF';
+  let csv = BOM + 'ناو,یەکە,بڕی مانەوە,کۆی خەرجی (USD),کۆی فرۆشتن (USD),قازانج (USD),قەرزی مانەوە (USD),فرۆشیار,تێبینی\n';
+  prods.forEach(p => {
+    const s = getProductStats(p.id);
+    csv += [
+      '"'+p.name.replace(/"/g,'""')+'"',
+      '"'+p.unit+'"',
+      fmtN(p.qty,2),
+      s.totalCostUSD.toFixed(2),
+      s.totalRevenueUSD.toFixed(2),
+      s.profitUSD.toFixed(2),
+      s.debtRemainUSD.toFixed(2),
+      '"'+(p.supplier||'').replace(/"/g,'""')+'"',
+      '"'+(p.note||'').replace(/"/g,'""')+'"',
+    ].join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `products-${today()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== EXPORT مامەڵەکان بۆ CSV =====
+function exportEventsToCSV() {
+  const events = getAllEvents();
+  const prods = getProducts();
+  const BOM = '\uFEFF';
+  const types = {load:'بارکردن',shipping:'کرێی بار',tax:'باج',raseed:'ڕەسید',omola:'عومولە',sell_cash:'فرۆشتنی نەقد',sell_debt:'فرۆشتنی قەرز',debt_pay:'پارەدانەوە'};
+  let csv = BOM + 'جۆر,کاڵا,بەروار,بڕ,نرخی یەکە,کۆی نرخ,دراو,نرخی دۆلار,کڕیار,تەلەفون,تێبینی\n';
+  events.forEach(ev => {
+    const prod = prods.find(p => p.id == ev.productId);
+    csv += [
+      '"'+(types[ev.type]||ev.type)+'"',
+      '"'+(prod?.name||'').replace(/"/g,'""')+'"',
+      ev.date||'',
+      ev.qty!=null ? fmtN(ev.qty,2) : '',
+      ev.unitPrice!=null ? ev.unitPrice.toFixed(2) : '',
+      ev.totalPrice!=null ? ev.totalPrice.toFixed(2) : (ev.amount!=null ? ev.amount.toFixed(2) : ''),
+      ev.currency||'',
+      ev.amountUSD ? ev.amountUSD.toFixed(2) : '',
+      '"'+(ev.buyer||'').replace(/"/g,'""')+'"',
+      ev.phone||'',
+      '"'+(ev.note||'').replace(/"/g,'""')+'"',
+    ].join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `events-${today()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== EXPORT بۆ PDF (HTML → Print) =====
+function exportToPDF() {
+  const prods = getProducts();
+  const g = getGlobalStats();
+  const now = new Date().toLocaleDateString('ar-IQ');
+  let rows = '';
+  prods.forEach((p, i) => {
+    const s = getProductStats(p.id);
+    rows += `<tr>
+      <td>${i+1}</td>
+      <td>${escHtml(p.name)}</td>
+      <td>${fmtN(p.qty,2)} ${escHtml(p.unit)}</td>
+      <td style="color:#dc2626">${fmtC(s.totalCostUSD,'USD')}</td>
+      <td style="color:#16a34a">${fmtC(s.totalRevenueUSD,'USD')}</td>
+      <td style="font-weight:800;color:${s.profitUSD>=0?'#16a34a':'#dc2626'}">${fmtC(s.profitUSD,'USD')}</td>
+      <td style="color:${s.debtRemainUSD>0?'#dc2626':'#16a34a'}">${s.debtRemainUSD>0.001?fmtC(s.debtRemainUSD,'USD'):'✅'}</td>
+    </tr>`;
+  });
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+<title>ڕاپۆرتی کاڵاکان</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans Arabic',Arial,sans-serif;color:#111;background:#fff;font-size:12px;direction:rtl;padding:14mm}
+h1{font-size:18px;margin-bottom:4px}
+.meta{color:#666;font-size:11px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.st{border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center}
+.st.ok{background:#ecfdf5;border-color:#6ee7b7}.st.bad{background:#fef2f2;border-color:#fca5a5}
+.sv{font-size:14px;font-weight:800;margin:3px 0}.sl{font-size:9px;color:#666;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th{background:#1a3a5c;color:#fff;padding:8px 10px;text-align:right;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
+tr:nth-child(even) td{background:#f9fafb}
+.footer{text-align:center;margin-top:18px;padding-top:10px;border-top:1px solid #eee;font-size:10px;color:#999}
+@page{margin:12mm;size:A4}@media print{body{padding:0}}
+</style></head><body>
+<h1>📦 ڕاپۆرتی گشتی کاڵاکان</h1>
+<div class="meta">بەروار: ${now} · ${prods.length} کاڵا</div>
+<div class="stats">
+  <div class="st"><div class="sv">${prods.length}</div><div class="sl">📦 کاڵاکان</div></div>
+  <div class="st ok"><div class="sv" style="color:#16a34a">${fmtC(g.totalRevenueUSD,'USD')}</div><div class="sl">💰 فرۆشتن</div></div>
+  <div class="st bad"><div class="sv" style="color:#dc2626">${fmtC(g.totalCostUSD,'USD')}</div><div class="sl">🛒 خەرجی</div></div>
+  <div class="st ${g.profitUSD>=0?'ok':'bad'}"><div class="sv" style="color:${g.profitUSD>=0?'#16a34a':'#dc2626'}">${fmtC(g.profitUSD,'USD')}</div><div class="sl">${g.profitUSD>=0?'📈 قازانج':'📉 زەرەر'}</div></div>
+</div>
+<table>
+<thead><tr><th>#</th><th>کاڵا</th><th>ستۆک</th><th>خەرجی</th><th>فرۆشتن</th><th>قازانج</th><th>قەرز</th></tr></thead>
+<tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:20px;color:#999">هیچ کاڵایەک نییە</td></tr>'}</tbody>
+</table>
+<div class="footer">سیستەمی بەڕێوەبردنی کاڵا · v2.2 · ${now}</div>
+</body></html>`);
+  win.document.close();
+  win.onload = () => { win.focus(); win.print(); };
+}
+
 // ===== ستۆکی کەم =====
 function getLowStockProducts(threshold = 5) {
   return getProducts().filter(p => parseFloat(p.qty) <= threshold && parseFloat(p.qty) >= 0);
+}
+
+// ===== ئاگادارکردنەوەی بەرواری قەرز =====
+// دەگەڕێنێتەوە لیستی قەرزارانی کە بەرواریان تێپەڕیوە یان ناو ٧ ڕۆژ دەتێپەڕێ
+function getDebtDueAlerts() {
+  const events  = getAllEvents();
+  const todayStr = today();
+  const debtMap  = {};
+
+  events.forEach(ev => {
+    try {
+      if (!ev || !ev.type) return;
+      const token = ev.customerToken || ((ev.buyer||'') + '_' + (ev.phone||''));
+
+      if (ev.type === 'sell_debt') {
+        if (!debtMap[token]) {
+          debtMap[token] = {
+            name:     ev.buyer || 'نەناسراو',
+            phone:    ev.phone || '',
+            owedUSD:  0,
+            dueDate:  ev.dueDate || '',
+          };
+        }
+        debtMap[token].owedUSD += toUSD(ev.totalPrice, ev.currency);
+        // نوێترین بەروار بەکاربهێنە
+        if (ev.dueDate && (!debtMap[token].dueDate || ev.dueDate > debtMap[token].dueDate)) {
+          debtMap[token].dueDate = ev.dueDate;
+        }
+      }
+
+      if (ev.type === 'debt_pay') {
+        if (debtMap[token]) {
+          debtMap[token].owedUSD -= toUSD(ev.amount, ev.currency);
+        }
+      }
+    } catch(e) {
+      console.warn('getDebtDueAlerts: ئیڤێنتی خراپ تێپەڕاندرا', ev?.id, e);
+    }
+  });
+
+  const alerts = [];
+  Object.values(debtMap).forEach(d => {
+    if (d.owedUSD <= 0.001) return;  // قەرز تەواو دراوەتەوە
+    if (!d.dueDate) return;           // بەروار نییە، پشاندانی ناکرێت
+
+    const diffDays = Math.round((new Date(d.dueDate) - new Date(todayStr)) / 86400000);
+    if (diffDays < 0) {
+      alerts.push({ ...d, status: 'overdue', diffDays });
+    } else if (diffDays <= 7) {
+      alerts.push({ ...d, status: 'soon', diffDays });
+    }
+  });
+
+  return alerts;
 }

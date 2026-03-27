@@ -466,6 +466,25 @@ tr:hover td { background:rgba(255,255,255,.02); }
   .dqa-add { grid-column: span 2; }
 }
 
+/* ===== PAGINATION ===== */
+.pagination {
+  display:flex; align-items:center; justify-content:center;
+  gap:10px; margin-top:16px; padding:12px 0;
+}
+.pg-btn {
+  width:38px; height:38px; border-radius:50%;
+  border:1.5px solid var(--border); background:var(--card);
+  color:var(--text); font-size:18px; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.pg-btn:hover:not(:disabled) { background:var(--primary); color:#fff; border-color:var(--primary); }
+.pg-btn:disabled { opacity:.3; cursor:not-allowed; }
+.pg-info {
+  font-size:13px; font-weight:700; color:var(--muted);
+  min-width:80px; text-align:center;
+}
+
 /* ===== PRINT / PDF ===== */
 @media print {
   .sidebar, .topbar, .nav-i, .btn, .modal-overlay, .pc-tabs, .ev-form,
