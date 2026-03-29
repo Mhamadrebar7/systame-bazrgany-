@@ -1,9 +1,12 @@
+﻿  <!-- ====== index.html ====== -->
+
 <!DOCTYPE html>
 <html lang="ckb" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>بەڕێوەبردنی کاڵا</title>
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -17,7 +20,7 @@
 <div class="sidebar">
   <div class="sb-logo">
     <div class="ico">📦</div>
-    <div style="flex:1"><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.2</small></div>
+    <div style="flex:1"><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.4</small></div>
     <button class="menu-btn sb-close-btn" onclick="closeSidebar()">✕</button>
   </div>
   <div class="nav-sec">
@@ -28,6 +31,7 @@
     <div class="nav-i" onclick="showPage('addProduct')"><span class="ico">➕</span>کاڵای نوێ</div>
     <div class="nav-ttl">ئابووری</div>
     <div class="nav-i" onclick="showPage('profits')"><span class="ico">📈</span>قازانج و زەرەر</div>
+    <div class="nav-i" onclick="showPage('expenses')"><span class="ico">💸</span>خەرجییەکان</div>
     <div class="nav-ttl">ڕێکخستن</div>
     <div class="nav-i" onclick="showPage('currencies')"><span class="ico">💱</span>دراوەکان</div>
     <div class="nav-i" onclick="showPage('suppliers')"><span class="ico">🏪</span>فرۆشیارەکان</div>
@@ -35,7 +39,7 @@
     <div class="nav-i" onclick="showPage('settings')"><span class="ico">⚙️</span>ڕێکخستن و پشتیوانی</div>
   </div>
   <div class="sb-foot">
-    <div style="font-size:10px;color:var(--faint);text-align:center">نسخە ٢.١</div>
+    <div style="font-size:10px;color:var(--faint);text-align:center">نسخە ٢.٤</div>
   </div>
 </div>
 
@@ -89,9 +93,9 @@
         <div class="ca"><button class="btn btn-ol btn-sm" onclick="showPage('products')">هەموو</button></div>
       </div>
       <div id="dashTopProds"></div>
-      <canvas id="chartTopProds" style="display:none"></canvas>
-      <canvas id="chartCost"     style="display:none"></canvas>
-      <div id="chartCostLegend"  style="display:none"></div>
+      <div id="chartTopProdsWrap" style="position:relative;height:200px;display:none"><canvas id="chartTopProds"></canvas></div>
+      <div id="chartCostWrap" style="position:relative;height:200px;display:none"><canvas id="chartCost"></canvas></div>
+      <div id="chartCostLegend" style="display:none"></div>
     </div>
 
   </div>
@@ -103,7 +107,7 @@
     <!-- سەرچاوان + فلتەر -->
     <div class="prod-toolbar">
       <div class="prod-search-wrap">
-        <span class="prod-search-ico">🔍</span>
+        <span class="prod-search-ico">🔎</span>
         <input type="search" id="prodSearchInput" placeholder="گەڕان..."
           oninput="searchProducts(this.value)"
           class="prod-search-input">
@@ -185,7 +189,7 @@
       </div>
       <div id="apPreview" class="mt8"></div>
       <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn btn-p" onclick="doAddProduct()">✅ زیادکردن</button>
+        <button id="addProductBtn" class="btn btn-p" onclick="doAddProduct()">✅ زیادکردن</button>
         <button class="btn btn-g" onclick="showPage('products')">پاشگەزبوونەوە</button>
       </div>
     </div>
@@ -213,6 +217,88 @@
     <div id="profitsContent"></div>
   </div>
 
+  <!-- ====== EXPENSES ====== -->
+  <div class="page" id="pg-expenses">
+    <div id="expenseAlert"></div>
+
+    <div class="card">
+      <div class="ctitle">💸 خەرجییەکان</div>
+      <div class="sgrid" id="expenseStats"></div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">➕ زیادکردنی خەرجی</div>
+      <div class="fg2">
+        <div class="fg">
+          <label>جۆری خەرجی *</label>
+          <select id="expCategory">
+            <option value="">هەڵبژێرە</option>
+            <option value="کرێی گواستنەوە">کرێی گواستنەوە</option>
+            <option value="باج">باج</option>
+            <option value="ڕەسید">ڕەسید</option>
+            <option value="عومولە">عومولە</option>
+            <option value="کرێی مەخزەن">کرێی مەخزەن</option>
+            <option value="خەرجی تر">خەرجی تر</option>
+            <option value="تر">تر</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>بڕ *</label>
+          <input id="expAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </div>
+        <div class="fg">
+          <label>دراو</label>
+          <select id="expCurrency" class="curr-select"></select>
+        </div>
+        <div class="fg">
+          <label>بەروار *</label>
+          <input id="expDate" type="date">
+        </div>
+        <div class="fg">
+          <label>کاڵا</label>
+          <select id="expProduct">
+            <option value="">گشتی</option>
+          </select>
+        </div>
+        <div class="fg c2">
+          <label>تێبینی</label>
+          <input id="expNote" placeholder="...">
+        </div>
+      </div>
+      <button class="btn btn-p" onclick="doAddExpense()">✅ زیادکردن</button>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">🧾 مێژووی خەرجی</div>
+
+      <div class="prod-toolbar">
+        <div class="prod-search-wrap">
+          <span class="prod-search-ico">🔎</span>
+          <input type="search" id="expenseSearch" placeholder="گەڕان بە جۆر، تێبینی یان کاڵا..." oninput="filterExpenses()" class="prod-search-input">
+        </div>
+
+        <div class="prod-filters">
+          <select id="expenseFilterCategory" onchange="filterExpenses()" class="filter-sel">
+            <option value="">هەموو جۆرەکان</option>
+          </select>
+          <select id="expenseFilterType" onchange="filterExpenses()" class="filter-sel">
+            <option value="all">هەموو</option>
+            <option value="product">سەر بە کاڵا</option>
+            <option value="general">گشتی</option>
+          </select>
+          <select id="expenseSort" onchange="filterExpenses()" class="filter-sel">
+            <option value="date_desc">نوێترین</option>
+            <option value="date_asc">کۆنترین</option>
+          </select>
+        </div>
+
+        <div class="prod-filter-count" id="expenseFilterCount"></div>
+      </div>
+
+      <div id="expenseList"></div>
+      <div id="expensePagination"></div>
+    </div>
+  </div>
   <!-- ====== CURRENCIES ====== -->
   <div class="page" id="pg-currencies">
     <div id="currAlert"></div>
@@ -303,7 +389,7 @@
     <div class="card">
       <div class="ctitle">ℹ️ دەربارەی</div>
       <p style="color:var(--muted);font-size:13px;line-height:2">
-        سیستەمی بەڕێوەبردنی کاڵا · نسخە ٢.٢<br>
+        سیستەمی بەڕێوەبردنی کاڵا · نسخە ٢.٤<br>
         داتاکان لە بڕاوزەرەکەت پاشەکەوت دەبن (localStorage)
       </p>
     </div>
@@ -313,8 +399,10 @@
 
 <!-- SCRIPTS — ئەوردەر گرنگە -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="utils.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
+<script src="codex_patch.js"></script>
 <script>
   // INIT
   try {
@@ -351,3 +439,9 @@
 </script>
 </body>
 </html>
+
+
+
+
+
+

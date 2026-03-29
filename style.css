@@ -1,4 +1,4 @@
-/* style.css — بەڕێوەبردنی کاڵا v2.1 */
+/* style.css � �???�?����� ��?� v2.2 */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap');
 
 :root {
@@ -72,7 +72,7 @@ body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:va
 .topbar-btn-full { display:inline; }
 .sb-close-btn { display:none; }
 
-/* دوگمەی مۆبایل شناوەر */
+/* ���?� �?���� ����?� */
 .mobile-menu-fab {
   display:none;
   position:fixed; bottom:20px; right:16px; z-index:100;
@@ -229,6 +229,14 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .tag { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; background:var(--bg3); color:var(--muted); font-weight:600; }
 .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.report-stack { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin-bottom:16px; }
+.report-stack > .card { min-width:0; margin-bottom:0; }
+.report-table-card .tw { min-width:0; }
+.report-table-card table { min-width:100%; }
+.report-empty { min-height:132px; border:1px dashed var(--border2); border-radius:var(--rs); background:linear-gradient(180deg,rgba(255,255,255,.015),rgba(255,255,255,.03)); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:18px; text-align:center; }
+.report-empty .ei { font-size:24px; line-height:1; }
+.report-empty .eh { font-size:13px; font-weight:700; color:var(--text); }
+.report-empty .ed { font-size:11px; color:var(--muted); }
 
 /* ===== DUAL CURRENCY BOX ===== */
 .dual-cur-box {
@@ -241,7 +249,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .dual-label  { font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; text-align:center; }
 .dual-arrow  { font-size:22px; color:var(--primary); align-self:center; user-select:none; }
 
-/* ڕەسیدی دووبەرگی */
+/* ??���� ����?ѐ� */
 .dual-receipt {
   background:linear-gradient(135deg,rgba(79,142,247,.08),rgba(52,211,153,.06));
   border:1px solid var(--border2); border-radius:var(--rs); padding:12px;
@@ -330,7 +338,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
   padding:2px 0;
 }
 
-/* ===== PRODUCT CARD — COMPACT SINGLE ROW ===== */
+/* ===== PRODUCT CARD � COMPACT SINGLE ROW ===== */
 .prod-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:8px; transition:border-color .2s; }
 .prod-card:hover { border-color:var(--border2); }
 
@@ -351,7 +359,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
-/* badge — ستۆک و قازانج */
+/* badge � ��?� � ������ */
 .pcs-badge {
   display:inline-flex; align-items:center;
   padding:3px 7px; border-radius:12px;
@@ -362,7 +370,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .pcs-warn { background:var(--warn-bg); color:var(--warn); }
 .pcs-gray { background:var(--bg3);     color:var(--muted);}
 
-/* دوگمەکانی خێرا */
+/* ���?���� �?�� */
 .pcs-btn {
   width:32px; height:32px; border-radius:8px; border:none;
   font-size:14px; cursor:pointer; display:flex; align-items:center;
@@ -375,10 +383,11 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .pcs-load { background:rgba(79,142,247,.15);  }
 .pcs-more { background:transparent; color:var(--muted); font-size:18px; font-weight:700; }
 
-/* ستۆک کەم / خەڵاس */
+/* ��?� �?� / �??�� */
 .pc-no-stock  { border-color:rgba(248,113,113,.4) !important; }
 .pc-low-stock { border-color:rgba(251,191,36,.35) !important; }
-.pc-has-debt  { border-right:3px solid var(--warn); }
+.pc-has-debt  { box-shadow:inset 2px 0 0 rgba(251,191,36,.28); }
+.pcs-debt { background:rgba(251,191,36,.12); color:var(--warn); font-size:9px; padding:1px 6px; }
 
 /* ===== PC-BODY / TABS / CONTENT ===== */
 .pc-body         { display:none; border-top:1px solid var(--border); }
@@ -401,7 +410,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .pc-tab.active   { color:var(--primary); border-bottom-color:var(--primary); }
 .pc-content      { padding:14px; }
 
-/* مۆبایل */
+/* �?���� */
 @media (max-width:480px) {
   .pcs-name { max-width:120px; font-size:13px; }
   .pcs-badge { font-size:10px; padding:2px 6px; }
@@ -435,12 +444,12 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .pc-stat-chip .v { font-size:12px; font-weight:700; }
 .pc-stat-chip .l { font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:1px; }
 
-/* ستۆکی کەم — ئاگادار */
+/* ��?�� �?� � �ǐ���� */
 .pc-low-stock .pc-icon { background:rgba(248,113,113,.15) !important; }
 .pc-low-stock { border-color:rgba(248,113,113,.35) !important; }
 
-/* قەرز هەیە */
-.pc-has-debt { border-right:3px solid var(--warn) !important; }
+/* �?�� �?�? */
+.pc-has-debt { box-shadow:inset 2px 0 0 rgba(251,191,36,.28) !important; }
 
 /* ===== DASHBOARD QUICK ACTIONS ===== */
 .dash-quick-actions {
@@ -511,7 +520,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
 @media (max-width:768px) {
   :root { --sw: 0px; }
 
-  /* Sidebar: لە ڕاستەوەیە، translateX(+%) دەیباتە دەرەوەی ڕاست */
+  /* Sidebar: �? ?���?�?�?� translateX(+%) �?����? �?�?�?� ?��� */
   .sidebar {
     transform:translateX(100%);
     right:0;
@@ -529,25 +538,26 @@ tr:hover td { background:rgba(255,255,255,.02); }
   .main { margin-right:0; }
   .page { padding:10px; }
 
-  /* فۆرمەکان — ٢ ستوون بمێنن بۆ input بچووکەکان */
+  /* �?��?��� � 2 ����� ��?�� �? input ȍ��?��� */
   .fg2 { grid-template-columns:1fr 1fr; gap:8px; }
   .fg3 { grid-template-columns:1fr 1fr; gap:8px; }
-  /* c2 و c3 پڕ-پانی بمێنن */
+  /* c2 � c3 �?-���� ��?�� */
   .c2 { grid-column:span 2; }
   .c3 { grid-column:span 2; }
 
-  /* کارتەکانی داشبۆرد */
+  /* ����?���� ����?�� */
   .grid-2 { grid-template-columns:1fr; gap:10px; }
   .grid-3 { grid-template-columns:1fr 1fr; gap:8px; }
+  .report-stack { gap:10px; margin-bottom:12px; }
 
-  /* ستاتیستیکەکان */
+  /* ��������?��� */
   .sgrid { grid-template-columns:1fr 1fr; gap:8px; }
   .scard { padding:10px 8px; }
   .scard .si { font-size:18px; }
   .scard .sv { font-size:13px; }
   .scard .sl { font-size:10px; }
 
-  /* کارتی کاڵا — ئامارەکان نیشان بدە بەلام بچووک */
+  /* ����� ��?� � �����?��� ����� ��? �?��� ȍ�� */
   .pc-stats {
     display:flex;
     gap:6px;
@@ -561,31 +571,31 @@ tr:hover td { background:rgba(255,255,255,.02); }
   .pc-stats { width:100%; justify-content:flex-start; }
   .pc-content { padding:10px; }
 
-  /* تابەکان — بچووکتر */
+  /* ���?��� � ȍ���� */
   .pc-tab { padding:8px 10px; font-size:11px; }
 
-  /* توپبار */
+  /* ����� */
   .topbar { padding:10px 12px; }
   .topbar h2 { font-size:13px; }
   .topbar-btn-full { display:none; }
   .topbar-btn-icon { display:inline; }
 
-  /* دوگمەکان */
+  /* ���?��� */
   .btn { padding:7px 12px; font-size:12px; }
   .btn-sm { padding:5px 9px; font-size:11px; }
   .btn-xs { padding:3px 7px; font-size:10px; }
 
-  /* خشتەکان */
+  /* ���?��� */
   table { font-size:11px; }
   th, td { padding:6px 7px; }
 
-  /* کارت */
+  /* ���� */
   .card { padding:12px 14px; }
 
-  /* ئاگاداری دینی کەم */
+  /* �ǐ����� ���� �?� */
   .stock-alert { font-size:12px; padding:8px 12px; }
 
-  /* ئایتمی ئیڤێنت */
+  /* ������ ��??�� */
   .ev-item { padding:9px 10px; gap:8px; }
   .ev-item .ev-title { font-size:11px; }
   .ev-item .ev-meta { font-size:10px; }
@@ -594,17 +604,17 @@ tr:hover td { background:rgba(255,255,255,.02); }
 
 @media (max-width:480px) {
   .page { padding:8px; }
-  /* فۆرمی زیادکردنی کاڵا — تەک ستوون بکە */
+  /* �?��� ���Ϙ���� ��?� � �?� ����� Ș? */
   #pg-addProduct .fg2 { grid-template-columns:1fr; }
   #pg-addProduct .c2 { grid-column:span 1; }
 
-  /* داشبۆرد ستاتیستیک */
+  /* ����?�� �������� */
   .sgrid { grid-template-columns:1fr 1fr; }
 
-  /* چارتەکان بچووکتر */
+  /* ����?��� ȍ���� */
   .grid-2 canvas { height:150px !important; }
 
-  /* سەرپەڕە */
+  /* �?с??? */
   .topbar h2 { font-size:12px; }
 }
 

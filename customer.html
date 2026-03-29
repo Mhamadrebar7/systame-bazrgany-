@@ -1,3 +1,4 @@
+﻿<!-- ====== customer.html ====== -->
 <!DOCTYPE html>
 <html lang="ckb" dir="rtl">
 <head>
@@ -96,7 +97,7 @@ body{font-family:'Noto Sans Arabic',sans-serif;background:var(--bg);color:var(--
 .empty p{font-size:12px;line-height:1.8}
 .footer{text-align:center;padding:24px 20px;color:var(--faint);font-size:10px;letter-spacing:.5px}
 
-/* PRINT — تەنها print دەکاتەوە */
+/* PRINT */
 @media print{
   .tabs-wrap,.wa-btn,.print-btn,.no-print{display:none!important}
   body{background:#fff!important;color:#111!important}
@@ -141,79 +142,381 @@ body{font-family:'Noto Sans Arabic',sans-serif;background:var(--bg);color:var(--
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
+<!-- utils.js پێشتر بار دەبێت: escHtml, today, fmtN, fmtC, fmtDual, toUSD, fromUSD, legacyHashToken -->
+<script src="utils.js"></script>
 <script>
-const DB = { get: k => { try { return JSON.parse(localStorage.getItem('pm_'+k)||'null'); } catch { return null; } } };
+// ===== DB (Read-only — تەنها خوێندنەوە) =====
+// customer.html داتا نانوسێت — تەنها دەیخوێنێتەوە
+const DB = {
+  get: k => { try { return JSON.parse(localStorage.getItem('pm_'+k)||'null'); } catch { return null; } }
+};
 
 function getCurrencies() {
   return DB.get('currencies') || [
-    {code:'IQD',rateToUSD:1480,symbol:'IQD',flag:'🇮🇶'},
-    {code:'USD',rateToUSD:1,symbol:'$',flag:'🇺🇸'},
+    { code: 'IQD', name: 'دینار عێراقی',    flag: '🇮🇶', rateToUSD: 1310,   symbol: 'IQD' },
+    { code: 'USD', name: 'دۆلاری ئەمەریکی', flag: '🇺🇸', rateToUSD: 1,      symbol: '$'   },
+    { code: 'TRY', name: 'لیرەی تورک',      flag: '🇹🇷', rateToUSD: 32.5,   symbol: '₺'   },
+    { code: 'EUR', name: 'یۆرۆ',            flag: '🇪🇺', rateToUSD: 0.92,   symbol: '€'   },
+    { code: 'IRR', name: 'ڕیالی ئێران',     flag: '🇮🇷', rateToUSD: 42000,  symbol: '﷼'   },
+    { code: 'SAR', name: 'ڕیال سعودی',      flag: '🇸🇦', rateToUSD: 3.75,   symbol: 'SR'  },
+    { code: 'CNY', name: 'یوانی چین',       flag: '🇨🇳', rateToUSD: 7.24,   symbol: '¥'   },
   ];
 }
-const toUSD   = (a,c) => { const x=getCurrencies().find(v=>v.code===c); return x?(parseFloat(a)||0)/x.rateToUSD:parseFloat(a)||0; };
-const fromUSD = (u,c) => { const x=getCurrencies().find(v=>v.code===c); return x?(parseFloat(u)||0)*x.rateToUSD:parseFloat(u)||0; };
-function fmtN(n,d){ const num=parseFloat(n||0); if(d===undefined)d=num>=100?0:2; return num.toLocaleString('en',{minimumFractionDigits:d,maximumFractionDigits:d}); }
-function fmtC(a,c){ const x=getCurrencies().find(v=>v.code===c)||{symbol:c}; const d=(c==='IQD'||c==='IRR')?0:2; return x.symbol+' '+fmtN(a,d); }
-function today(){ return new Date().toISOString().split('T')[0]; }
-function getProducts()  { return DB.get('products') || []; }
-function getAllEvents()  { return DB.get('events')   || []; }
-function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function makeCustomerToken(buyer,phone){
-  const raw=(buyer||'')+'|'+(phone||'');let hash=5381;
-  for(let i=0;i<raw.length;i++)hash=((hash<<5)+hash)^raw.charCodeAt(i);
-  return Math.abs(hash).toString(36)+(buyer||'x').slice(0,3).replace(/\s/g,'');
-}
-function getTokenFromURL(){ const p=new URLSearchParams(location.search); return p.get('t')||p.get('token')||''; }
+// escHtml, today, fmtN, fmtC, toUSD, fromUSD, legacyHashToken, roundMoney, normalizePhone, validateToken → utils.js
+function getProducts() { return DB.get('products') || []; }
+function getAllEvents() { return DB.get('events') || []; }
 
-function getCustomerData(token){
-  if(!token) return null;
-  const allEvs=getAllEvents(), prods=getProducts();
-  const myEvs=allEvs.filter(ev=>{
-    if(ev.customerToken===token) return true;
-    if(!ev.customerToken&&(ev.buyer||ev.phone)) return makeCustomerToken(ev.buyer||'',ev.phone||'')===token;
-    return false;
-  });
-  if(!myEvs.length) return null;
-  const first=myEvs.find(e=>e.buyer)||myEvs[0];
-  const name=first.buyer||'کڕیار', phone=first.phone||'';
-  let totalBoughtUSD=0,totalDebtUSD=0,totalPaidUSD=0;
-  const txs=[];
-  myEvs.forEach(ev=>{
-    const prod=prods.find(p=>p.id==ev.productId);
-    const pname=prod?prod.name:'—', punit=prod?prod.unit:'';
-    if(ev.type==='sell_cash'){ totalBoughtUSD+=toUSD(ev.totalPrice,ev.currency); txs.push({type:'sell_cash',date:ev.date,prod:pname,unit:punit,qty:ev.qty,amount:ev.totalPrice,currency:ev.currency,note:ev.note||''}); }
-    if(ev.type==='sell_debt'){ totalBoughtUSD+=toUSD(ev.totalPrice,ev.currency); totalDebtUSD+=toUSD(ev.totalPrice,ev.currency); txs.push({type:'sell_debt',date:ev.date,prod:pname,unit:punit,qty:ev.qty,amount:ev.totalPrice,currency:ev.currency,dueDate:ev.dueDate||'',note:ev.note||''}); }
-    if(ev.type==='debt_pay'){ totalPaidUSD+=toUSD(ev.amount,ev.currency); txs.push({type:'debt_pay',date:ev.date,prod:'',unit:'',qty:null,amount:ev.amount,currency:ev.currency,note:''}); }
-  });
-  const debtRemainUSD=totalDebtUSD-totalPaidUSD;
-  const paidPct=totalDebtUSD>0?Math.min(100,(totalPaidUSD/totalDebtUSD)*100):100;
-  txs.sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
-  return{name,phone,token,totalBoughtUSD,totalDebtUSD,totalPaidUSD,debtRemainUSD,paidPct,txs};
+const CUSTOMER_EVENT_TYPES = new Set(['sell_cash', 'sell_debt', 'debt_pay']);
+const HIST_PAGE_SIZE = 20;
+let activeTab = 'summary';
+let histPage = 1;
+let currentToken = '';
+let currentCustomer = null;
+
+function isCustomerEvent(ev) {
+  return !!ev && CUSTOMER_EVENT_TYPES.has(ev.type);
 }
 
-let activeTab='summary';
+function showLoadingState(msg = 'ناوەڕۆک بار دەکرێت...') {
+  const root = document.getElementById('root');
+  if (!root) return;
+  root.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+      <div style="width:32px;height:32px;border:2.5px solid #1e2d45;border-top-color:#4f8ef7;border-radius:50%;animation:spin .8s linear infinite"></div>
+      <div style="color:#6b7fa3;font-size:12px">${escHtml(msg)}</div>
+    </div>`;
+}
 
-function render(){
-  const token=getTokenFromURL(), root=document.getElementById('root');
-  if(!token){ root.innerHTML=errPage('🔗','لینکت دروست نییە','ئەم پەیجە تەنها لە ڕێگەی لینکی تایبەتەوە کراوە دەبێت.<br>تکایە لە فرۆشیارەکەت بخوازە لینکەکەت بنێردرێت.'); return; }
-  const cust=getCustomerData(token);
-  if(!cust){ root.innerHTML=errPage('🔍','هیچ مامەڵەیەک نەدۆزرایەوە','یان لینکەکە کۆنە، یان هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.'); return; }
+function getTokenFromURL() {
+  const p = new URLSearchParams(location.search);
+  const t = (p.get('t') || p.get('token') || '').trim();
+  if (t && !validateToken(t)) {
+    console.warn('[customer.html] Invalid token:', t);
+    return '';
+  }
+  return t;
+}
 
-  const hasDebt=cust.debtRemainUSD>0.001;
-  const debtIQD=fromUSD(cust.debtRemainUSD,'IQD');
-  const boughtIQD=fromUSD(cust.totalBoughtUSD,'IQD');
-  const paidIQD=fromUSD(cust.totalPaidUSD,'IQD');
-  const waMsg=encodeURIComponent(`سڵاو ${cust.name} 👋\n\n📊 مامەڵەکانت:\n🛒 کۆی کڕین: ${fmtC(boughtIQD,'IQD')}\n✅ دراوەتەوە: ${fmtC(paidIQD,'IQD')}\n`+(hasDebt?`⚠️ قەرزی مانەوە: ${fmtC(debtIQD,'IQD')}\n\n`:'\n')+`بۆ بینینی هەموو مامەڵەکانت:\n${location.href}`);
-  const waLink=cust.phone?`https://wa.me/${cust.phone.replace(/\D/g,'')}?text=${waMsg}`:`https://wa.me/?text=${waMsg}`;
+function safeReadStore(key, label) {
+  const storageKey = 'pm_' + key;
+  const raw = localStorage.getItem(storageKey);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.warn(`[${label}] invalid store shape, resetting`);
+      localStorage.setItem(storageKey, '{}');
+      return {};
+    }
+    return parsed;
+  } catch (e) {
+    console.warn(`[${label}] corrupted store, resetting`, e);
+    localStorage.setItem(storageKey, '{}');
+    return {};
+  }
+}
 
-  root.innerHTML=`
+function safeWriteStore(key, value, label) {
+  const storageKey = 'pm_' + key;
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(value || {}));
+  } catch (e) {
+    console.warn(`[${label}] write failed`, e);
+  }
+}
+
+function resolveEventTokenForIndex(ev, registry) {
+  if (!ev || typeof ev !== 'object') return '';
+  if (ev.customerToken && validateToken(ev.customerToken)) return ev.customerToken;
+
+  const buyer = (ev.buyer || '').trim();
+  const normPhone = normalizePhone(ev.phone || '');
+  if (!buyer && !normPhone) return '';
+
+  if (normPhone && registry[normPhone] && validateToken(registry[normPhone].token)) {
+    return registry[normPhone].token;
+  }
+  if (buyer && registry[buyer] && validateToken(registry[buyer].token)) {
+    return registry[buyer].token;
+  }
+
+  const legacyNorm = legacyHashToken(buyer, normPhone);
+  if (legacyNorm && validateToken(legacyNorm)) return legacyNorm;
+
+  const legacyRaw = legacyHashToken(buyer, ev.phone || '');
+  if (legacyRaw && validateToken(legacyRaw)) return legacyRaw;
+
+  return '';
+}
+
+function buildCustomerEventIndexFallback() {
+  const events = getAllEvents();
+  const registry = DB.get('customerTokens') || {};
+  const index = {};
+
+  events.forEach(ev => {
+    try {
+      if (!isCustomerEvent(ev) || ev.id == null) return;
+      const token = resolveEventTokenForIndex(ev, registry);
+      if (!token || !validateToken(token)) return;
+      if (!index[token]) index[token] = [];
+      index[token].push(ev.id);
+    } catch (e) {
+      console.warn('[customer.html] skip broken event while rebuilding index', ev?.id, e);
+    }
+  });
+
+  safeWriteStore('eventIndex', index, 'pm_eventIndex');
+  return index;
+}
+
+function getCustomerEventIds(token) {
+  if (!token || !validateToken(token)) return [];
+
+  let index = safeReadStore('eventIndex', 'pm_eventIndex');
+  if (!Object.keys(index).length && getAllEvents().length) {
+    index = buildCustomerEventIndexFallback();
+  }
+
+  let ids = index[token];
+  if (ids != null && !Array.isArray(ids)) {
+    index = buildCustomerEventIndexFallback();
+    ids = index[token];
+  }
+
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids.filter(id => id != null))];
+}
+
+function isCompleteCustomerSummary(summary) {
+  return !!summary
+    && typeof summary === 'object'
+    && validateToken(summary.token || '')
+    && Array.isArray(summary.txs)
+    && Array.isArray(summary.productBreakdown);
+}
+
+function getCachedCustomerSummary(token) {
+  if (!token || !validateToken(token)) return null;
+  const cache = safeReadStore('customerCache', 'pm_customerCache');
+  const entry = cache[token];
+  if (!entry || !entry.data || !isCompleteCustomerSummary(entry.data)) return null;
+  return entry.data;
+}
+
+function saveCachedCustomerSummary(token, summary) {
+  if (!token || !validateToken(token) || !isCompleteCustomerSummary(summary)) return;
+  const cache = safeReadStore('customerCache', 'pm_customerCache');
+  cache[token] = {
+    savedAt: new Date().toISOString(),
+    data: summary,
+  };
+  safeWriteStore('customerCache', cache, 'pm_customerCache');
+}
+
+function eventBelongsToToken(ev, token, regEntry, registry) {
+  if (!isCustomerEvent(ev)) return false;
+  if (ev.customerToken === token) return true;
+
+  const regPhone = normalizePhone(regEntry?.phone || '');
+  if (regPhone && ev.phone && normalizePhone(ev.phone) === regPhone) return true;
+
+  if (!ev.customerToken && (ev.buyer || ev.phone)) {
+    const byRegistry = resolveEventTokenForIndex(ev, registry);
+    if (byRegistry && byRegistry === token) return true;
+
+    const legacyNorm = legacyHashToken(ev.buyer || '', normalizePhone(ev.phone || ''));
+    if (legacyNorm === token) return true;
+
+    const legacyRaw = legacyHashToken(ev.buyer || '', ev.phone || '');
+    if (legacyRaw === token) return true;
+  }
+
+  return false;
+}
+
+function getCustomerData(token, opts = {}) {
+  if (!token || !validateToken(token)) return null;
+
+  const allEvs = getAllEvents();
+  const prods = getProducts();
+  const regEntry = lookupCustomerByToken(token);
+  const registry = DB.get('customerTokens') || {};
+
+  const preferIndex = opts.preferIndex !== false;
+  const allowFullScan = opts.allowFullScan !== false;
+
+  let myEvs = [];
+
+  if (preferIndex) {
+    const eventIds = getCustomerEventIds(token);
+    if (eventIds.length) {
+      const evMap = new Map();
+      allEvs.forEach(ev => {
+        if (ev && ev.id != null) evMap.set(String(ev.id), ev);
+      });
+      myEvs = eventIds
+        .map(id => evMap.get(String(id)))
+        .filter(ev => isCustomerEvent(ev));
+    }
+  }
+
+  if (!myEvs.length && allowFullScan) {
+    myEvs = allEvs.filter(ev => eventBelongsToToken(ev, token, regEntry, registry));
+  }
+
+  if (!myEvs.length) return null;
+
+  const first = myEvs.find(e => e.buyer) || myEvs[0];
+  const name  = regEntry?.name || first.buyer || 'کڕیار';
+  const phone = normalizePhone(regEntry?.phone || first.phone || '');
+
+  let totalBoughtUSD = 0;
+  let totalDebtUSD = 0;
+  let totalPaidUSD = 0;
+  const txs = [];
+
+  myEvs.forEach(ev => {
+    const prod = prods.find(p => p.id == ev.productId);
+    const pname = prod ? prod.name : '—';
+    const punit = prod ? prod.unit : '';
+
+    if (ev.type === 'sell_cash') {
+      totalBoughtUSD += toUSD(ev.totalPrice, ev.currency);
+      txs.push({ type: 'sell_cash', date: ev.date || '', prod: pname, unit: punit, qty: ev.qty, amount: ev.totalPrice, currency: ev.currency, note: ev.note || '', discountAmount: ev.discountAmount || 0 });
+    }
+
+    if (ev.type === 'sell_debt') {
+      totalBoughtUSD += toUSD(ev.totalPrice, ev.currency);
+      totalDebtUSD   += toUSD(ev.totalPrice, ev.currency);
+      txs.push({ type: 'sell_debt', date: ev.date || '', prod: pname, unit: punit, qty: ev.qty, amount: ev.totalPrice, currency: ev.currency, dueDate: ev.dueDate || '', note: ev.note || '', discountAmount: ev.discountAmount || 0 });
+    }
+
+    if (ev.type === 'debt_pay') {
+      totalPaidUSD += toUSD(ev.amount, ev.currency);
+      const dpProd = prods.find(p2 => p2.id == ev.productId);
+      txs.push({ type: 'debt_pay', date: ev.date || '', prod: dpProd ? dpProd.name : '', unit: '', qty: null, amount: ev.amount, currency: ev.currency, note: ev.note || '' });
+    }
+  });
+
+  const debtRemainUSD = Math.max(0, roundMoney(totalDebtUSD - totalPaidUSD));
+  const paidPct = totalDebtUSD > 0 ? Math.min(100, roundMoney((totalPaidUSD / totalDebtUSD) * 100)) : 100;
+  txs.sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1);
+
+  const prodMap2 = {};
+  myEvs.forEach(ev => {
+    if (ev.type !== 'sell_debt') return;
+    const prod  = prods.find(p => p.id == ev.productId);
+    const pname = prod ? prod.name : '—';
+    const pid   = ev.productId;
+    if (!prodMap2[pid]) prodMap2[pid] = { prodId: pid, name: pname, debtUSD: 0, paidUSD: 0, dueDate: '' };
+    prodMap2[pid].debtUSD += toUSD(ev.totalPrice, ev.currency);
+    if (ev.dueDate && (!prodMap2[pid].dueDate || ev.dueDate > prodMap2[pid].dueDate)) {
+      prodMap2[pid].dueDate = ev.dueDate;
+    }
+  });
+
+  const totalProdDebt2 = Object.values(prodMap2).reduce((s, x) => s + x.debtUSD, 0);
+  if (totalProdDebt2 > 0) {
+    myEvs.filter(e => e.type === 'debt_pay').forEach(ev => {
+      const payUSD = toUSD(ev.amount, ev.currency);
+      Object.values(prodMap2).forEach(pm => {
+        if (pm.debtUSD > 0) pm.paidUSD += payUSD * (pm.debtUSD / totalProdDebt2);
+      });
+    });
+  }
+
+  const productBreakdown = Object.values(prodMap2)
+    .map(pm => ({ ...pm, remainUSD: Math.max(0, roundMoney(pm.debtUSD - pm.paidUSD)) }))
+    .filter(pm => pm.debtUSD > 0)
+    .sort((a, b) => b.remainUSD - a.remainUSD);
+
+  return {
+    name,
+    phone,
+    token,
+    totalBoughtUSD: roundMoney(totalBoughtUSD),
+    totalDebtUSD: roundMoney(totalDebtUSD),
+    totalPaidUSD: roundMoney(totalPaidUSD),
+    debtRemainUSD,
+    paidPct,
+    txs,
+    productBreakdown,
+  };
+}
+
+function bootCustomerPortal() {
+  const root = document.getElementById('root');
+  showLoadingState();
+
+  requestAnimationFrame(() => {
+    try {
+      currentToken = getTokenFromURL();
+
+      if (!currentToken || !validateToken(currentToken)) {
+        root.innerHTML = errPage('🔗', 'لینکەکە دروست نییە', 'ئەم پەیجە تەنها بە لینکێکی تایبەت دەکرێت. تکایە لە فرۆشیارەکەت داوا بکە لینکەکەت بنێرێت.');
+        return;
+      }
+
+      let cust = getCachedCustomerSummary(currentToken);
+
+      if (!cust) {
+        cust = getCustomerData(currentToken, { preferIndex: true, allowFullScan: false });
+      }
+
+      if (!cust) {
+        cust = getCustomerData(currentToken, { preferIndex: false, allowFullScan: true });
+      }
+
+      if (!cust) {
+        root.innerHTML = errPage('🔍', 'هیچ مامەڵەیەک نەدۆزرایەوە', 'یان لینکەکە کۆنە، یان هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.');
+        return;
+      }
+
+      currentCustomer = cust;
+      activeTab = 'summary';
+      histPage = 1;
+      saveCachedCustomerSummary(currentToken, currentCustomer);
+      render();
+    } catch (e) {
+      console.error('[customer.html] boot error:', e);
+      root.innerHTML = errPage('⚠️', 'هەڵەیەک ڕوویدا', 'تکایە پەیجەکە دووبارە لۆد بکەرەوە.');
+    }
+  });
+}
+
+function render() {
+  const root = document.getElementById('root');
+  const cust = currentCustomer;
+
+  if (!cust) {
+    root.innerHTML = errPage('⚠️', 'داتای کڕیار بەردەست نییە', 'تکایە پەیجەکە دووبارە بکەرەوە.');
+    return;
+  }
+
+  const hasDebt   = cust.debtRemainUSD > 0.001;
+  const debtIQD   = fromUSD(cust.debtRemainUSD, 'IQD');
+  const boughtIQD = fromUSD(cust.totalBoughtUSD, 'IQD');
+  const paidIQD   = fromUSD(cust.totalPaidUSD, 'IQD');
+  const waMsg     = encodeURIComponent(
+    `سڵاو ${cust.name} 👋\n\n📋 مامەڵەکانت:\n💰 کۆی کڕین: ${fmtC(boughtIQD,'IQD')}\n✅ دراوەتەوە: ${fmtC(paidIQD,'IQD')}\n` +
+    (hasDebt ? `⚠️ قەرزی ماوە: ${fmtC(debtIQD,'IQD')}\n\n` : '\n') +
+    `بۆ بینینی هەموو مامەڵەکانت:\n${location.href}`
+  );
+  const waLink = cust.phone
+    ? `https://wa.me/${cust.phone.replace(/\D/g,'')}?text=${waMsg}`
+    : `https://wa.me/?text=${waMsg}`;
+
+  root.innerHTML = `
     <div class="header">
       <div class="header-inner">
         <div class="shop-logo">🏪</div>
         <div class="shop-name">مامەڵەکانم</div>
-        <div class="customer-welcome">بەخێربێیت، ${escHtml(cust.name)}</div>
-        <span class="debt-pill ${hasDebt?'has-debt':'no-debt'}">${hasDebt?`⚠️ قەرزت هەیە: ${fmtC(debtIQD,'IQD')}`:'✅ هیچ قەرزێکت نییە'}</span>
+        <div class="customer-welcome">بەخێربێیت ${escHtml(cust.name)}</div>
+        <span class="debt-pill ${hasDebt?'has-debt':'no-debt'}">${hasDebt
+          ? `⚠️ قەرزت هەیە: ${fmtC(debtIQD,'IQD')}`
+          : '✅ هیچ قەرزێکت نییە'}</span>
         <div class="quick-stats">
           <div class="qs-item"><div class="qs-val">${fmtC(boughtIQD,'IQD')}</div><div class="qs-lbl">کۆی کڕین</div></div>
           <div class="qs-item"><div class="qs-val ${hasDebt?'tbad':'tok'}">${fmtC(debtIQD,'IQD')}</div><div class="qs-lbl">قەرز</div></div>
@@ -228,90 +531,151 @@ function render(){
       </div>
     </div>
     <div class="content">
-      ${activeTab==='summary'?renderSummary(cust,hasDebt,debtIQD,boughtIQD,paidIQD,waLink):renderHistory(cust,waLink)}
+      ${activeTab === 'summary'
+        ? renderSummary(cust, hasDebt, debtIQD, boughtIQD, paidIQD, waLink)
+        : renderHistory(cust)}
     </div>
-    <div class="footer">مامەڵەکانت · ${new Date().toLocaleDateString('ar-IQ')} · v2.2</div>`;
+    <div class="footer">مامەڵەکانت · ${new Date().toLocaleDateString('ar-IQ')} · v2.4</div>`;
 }
 
-function renderSummary(cust,hasDebt,debtIQD,boughtIQD,paidIQD,waLink){
-  const recent=cust.txs.slice(0,3);
+function renderSummary(cust, hasDebt, debtIQD, boughtIQD, paidIQD, waLink) {
+  const recent = cust.txs.slice(0, 3);
+
+  const prodBreakdown = cust.productBreakdown && cust.productBreakdown.length
+    ? `<div class="card">
+        <div class="ctitle">📦 قەرز بەپێی کاڵا</div>
+        ${cust.productBreakdown.map(pb => {
+          const remIQD = fromUSD(pb.remainUSD, 'IQD');
+          const pct = pb.debtUSD > 0 ? Math.min(100, (pb.paidUSD / pb.debtUSD) * 100) : 100;
+          return `<div style="padding:9px 0;border-bottom:1px solid var(--border2)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <div>
+                <div style="font-size:13px;font-weight:600">${escHtml(pb.name)}</div>
+                ${pb.dueDate?`<div style="font-size:10px;color:var(--warn)">⏰ ${pb.dueDate}</div>`:''}
+              </div>
+              <div style="text-align:left">
+                <div style="font-weight:700;font-size:12px;color:${pb.remainUSD>0.001?'var(--bad)':'var(--ok)'}">${pb.remainUSD>0.001?fmtC(remIQD,'IQD'):'✅ تەواو'}</div>
+              </div>
+            </div>
+            ${pb.debtUSD>0?`<div class="progress-bar" style="height:4px"><div class="progress-fill" style="width:${fmtN(pct,0)}%;background:${pct>=100?'var(--ok)':pct>50?'var(--warn)':'var(--bad)'}"></div></div>`:''}
+          </div>`;
+        }).join('')}
+      </div>` : '';
+
   return `
     <div class="sgrid">
-      <div class="scard info"><div class="si">🛒</div><div class="sv tprimary">${fmtC(boughtIQD,'IQD')}</div><div class="sl">کۆی کڕین</div></div>
-      <div class="scard ${hasDebt?'bad':'ok'}"><div class="si">${hasDebt?'⚠️':'✅'}</div><div class="sv ${hasDebt?'tbad':'tok'}">${fmtC(debtIQD,'IQD')}</div><div class="sl">قەرزی مانەوە</div></div>
+      <div class="scard info"><div class="si">💰</div><div class="sv tprimary">${fmtC(boughtIQD,'IQD')}</div><div class="sl">کۆی کڕین</div></div>
+      <div class="scard ${hasDebt?'bad':'ok'}"><div class="si">${hasDebt?'⚠️':'✅'}</div><div class="sv ${hasDebt?'tbad':'tok'}">${fmtC(debtIQD,'IQD')}</div><div class="sl">قەرزی ماوە</div></div>
       <div class="scard ok"><div class="si">💳</div><div class="sv tok">${fmtC(paidIQD,'IQD')}</div><div class="sl">دراوەتەوە</div></div>
       <div class="scard"><div class="si">📦</div><div class="sv">${cust.txs.filter(t=>t.type!=='debt_pay').length}</div><div class="sl">کۆی مامەڵە</div></div>
     </div>
-    ${hasDebt?`
+    ${hasDebt ? `
     <div class="card">
-      <div class="ctitle">💳 ئەوضەعی قەرز</div>
+      <div class="ctitle">💳 دۆخی قەرز</div>
       <div class="sum-box" style="margin-bottom:0">
         <div class="sum-row"><span class="lbl">کۆی قەرز</span><span class="val tbad">${fmtC(fromUSD(cust.totalDebtUSD,'IQD'),'IQD')}</span></div>
         <div class="sum-row"><span class="lbl tok">✅ دراوەتەوە</span><span class="val tok">${fmtC(paidIQD,'IQD')}</span></div>
-        <div class="sum-total"><span>⚠️ مانەوە</span><span class="tbad">${fmtC(debtIQD,'IQD')}</span></div>
+        <div class="sum-total"><span>⚠️ ماوە</span><span class="tbad">${fmtC(debtIQD,'IQD')}</span></div>
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${cust.paidPct}%;background:${cust.paidPct>=100?'var(--ok)':cust.paidPct>50?'var(--warn)':'var(--bad)'}"></div></div>
       <div class="progress-label">${fmtN(cust.paidPct,1)}% دراوەتەوە</div>
     </div>
-    `:`
+    ${prodBreakdown}
+    ` : `
     <div style="background:var(--ok-bg);border:1px solid rgba(52,211,153,.25);border-radius:var(--r);padding:18px;text-align:center;margin-bottom:12px">
       <div style="font-size:32px;margin-bottom:8px">🎉</div>
       <div style="color:var(--ok);font-weight:800;font-size:15px;margin-bottom:3px">هیچ قەرزێکت نییە!</div>
       <div style="color:var(--muted);font-size:12px">هەموو پارەکانت دراوەتەوە — سوپاس!</div>
     </div>
     `}
-    ${recent.length?`
+    ${recent.length ? `
     <div class="card">
-      <div class="ctitle">⏱️ دوایین مامەڵەکان <span style="color:var(--primary);cursor:pointer;font-size:11px;font-weight:600" onclick="switchTab('history')">هەموو ببینە ←</span></div>
+      <div class="ctitle">↱ دوایین مامەڵەکان <span style="color:var(--primary);cursor:pointer;font-size:11px;font-weight:600" onclick="switchTab('history')">هەموو ببینە →</span></div>
       <div class="ev-list">${recent.map(buildEvItem).join('')}</div>
-    </div>`:''}
+    </div>` : ''}
     <div class="no-print">
-      <a href="${waLink}" target="_blank" class="wa-btn">${waIcon()} ناردنی مامەڵەکان بە واتساپ</a>
+      <a href="${waLink}" target="_blank" class="wa-btn">${waIcon()} ناردنی مامەڵەکان بۆ واتسەپ</a>
       <button class="print-btn" onclick="doPrint()">🖨️ چاپکردن / پاشەکەوتکردن بە PDF</button>
     </div>`;
 }
 
-function renderHistory(cust,waLink){
-  if(!cust.txs.length) return `<div class="empty"><span class="ei">📋</span><p>هیچ مامەڵەیەک نییە</p></div>`;
-  const groups={};
-  cust.txs.forEach(tx=>{ const k=(tx.date||'—').slice(0,7); if(!groups[k])groups[k]=[]; groups[k].push(tx); });
-  let html='';
-  Object.entries(groups).sort((a,b)=>b[0]>a[0]?1:-1).forEach(([m,txs])=>{
-    let lbl=m; try{lbl=new Date(m+'-01').toLocaleDateString('ar-IQ',{year:'numeric',month:'long'});}catch{}
-    html+=`<div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin:14px 0 7px">${lbl}</div>`;
-    html+=`<div class="ev-list">${txs.map(buildEvItem).join('')}</div>`;
+function changeHistoryPage(delta) {
+  const total = currentCustomer?.txs?.length || 0;
+  const totalPages = Math.max(1, Math.ceil(total / HIST_PAGE_SIZE));
+  histPage = Math.min(totalPages, Math.max(1, histPage + delta));
+  render();
+}
+
+function renderHistory(cust) {
+  if (!cust.txs.length) {
+    return `<div class="empty"><span class="ei">🭮</span><p>هیچ مامەڵەیەک بۆ ئەم کڕیارە تۆمار نەکراوە.</p></div>`;
+  }
+
+  const total = cust.txs.length;
+  const totalPages = Math.max(1, Math.ceil(total / HIST_PAGE_SIZE));
+  histPage = Math.min(totalPages, Math.max(1, histPage));
+
+  const start = (histPage - 1) * HIST_PAGE_SIZE;
+  const pageTxs = cust.txs.slice(start, start + HIST_PAGE_SIZE);
+
+  const groups = {};
+  pageTxs.forEach(tx => {
+    const k = (tx.date || '—').slice(0, 7);
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(tx);
   });
+
+  let html = '';
+  Object.entries(groups).sort((a, b) => b[0] > a[0] ? 1 : -1).forEach(([m, txs]) => {
+    let lbl = m;
+    try { lbl = new Date(m + '-01').toLocaleDateString('ar-IQ', { year:'numeric', month:'long' }); } catch {}
+    html += `<div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin:14px 0 7px">${lbl}</div>`;
+    html += `<div class="ev-list">${txs.map(buildEvItem).join('')}</div>`;
+  });
+
+  const paginationHTML = total > HIST_PAGE_SIZE ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:14px;padding:10px 0">
+      <button onclick="changeHistoryPage(-1)" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-family:inherit;cursor:pointer;font-size:12px;font-weight:600;${histPage<=1?'opacity:.35;cursor:not-allowed;':''}" ${histPage<=1?'disabled':''}>پێشوو</button>
+      <span style="font-size:12px;color:var(--muted);font-weight:700">پەڕە ${histPage} لە ${totalPages}</span>
+      <button onclick="changeHistoryPage(1)" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-family:inherit;cursor:pointer;font-size:12px;font-weight:600;${histPage>=totalPages?'opacity:.35;cursor:not-allowed;':''}" ${histPage>=totalPages?'disabled':''}>دواتر</button>
+    </div>` : '';
+
   return `
     <div style="background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.15);border-radius:var(--rs);padding:9px 13px;font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">
-      📋 مێژووی هەموو مامەڵەکانت لێرەدایە
+      📋 ${total} مامەڵە ${totalPages>1 ? `· پەڕە ${histPage} لە ${totalPages}` : ''}
     </div>
     ${html}
+    ${paginationHTML}
     <div class="no-print" style="margin-top:14px">
       <button class="print-btn" onclick="doPrint()">🖨️ چاپکردن / پاشەکەوتکردن بە PDF</button>
     </div>`;
 }
 
-// ===== PDF PRINT =====
-function doPrint(){
-  const token=getTokenFromURL(), cust=getCustomerData(token);
-  if(!cust) return;
-  const hasDebt=cust.debtRemainUSD>0.001;
-  const debtIQD=fromUSD(cust.debtRemainUSD,'IQD');
-  const boughtIQD=fromUSD(cust.totalBoughtUSD,'IQD');
-  const paidIQD=fromUSD(cust.totalPaidUSD,'IQD');
-  const printDate=new Date().toLocaleDateString('ar-IQ',{year:'numeric',month:'long',day:'numeric'});
+function doPrint() {
+  const token = currentToken || getTokenFromURL();
+  let cust = currentCustomer || getCachedCustomerSummary(token);
+  if (!cust && token) {
+    cust = getCustomerData(token, { preferIndex: true, allowFullScan: true });
+  }
+  if (!cust) return;
 
-  const icons={sell_cash:'💵',sell_debt:'📝',debt_pay:'✅'};
-  const labels={sell_cash:'کڕینی نەقد',sell_debt:'کڕینی قەرز',debt_pay:'پارەدانەوە'};
-  const txsHTML=cust.txs.map(tx=>`
+  const hasDebt   = cust.debtRemainUSD > 0.001;
+  const debtIQD   = fromUSD(cust.debtRemainUSD, 'IQD');
+  const boughtIQD = fromUSD(cust.totalBoughtUSD, 'IQD');
+  const paidIQD   = fromUSD(cust.totalPaidUSD, 'IQD');
+  const printDate = new Date().toLocaleDateString('ar-IQ',{year:'numeric',month:'long',day:'numeric'});
+
+  const icons  = { sell_cash:'💵', sell_debt:'🧾', debt_pay:'✅' };
+  const labels = { sell_cash:'کڕینی نەقد', sell_debt:'کڕینی قەرز', debt_pay:'پارەدانەوە' };
+  const txsHTML = cust.txs.map(tx => `
     <tr style="border-bottom:1px solid #eee">
-      <td style="padding:7px 8px">${icons[tx.type]||'📌'} ${labels[tx.type]||tx.type}</td>
+      <td style="padding:7px 8px">${icons[tx.type]||'📝'} ${labels[tx.type]||tx.type}</td>
       <td style="padding:7px 8px">${tx.date||''}</td>
       <td style="padding:7px 8px">${tx.prod?escHtml(tx.prod):''} ${tx.qty!=null?'('+fmtN(tx.qty,2)+' '+tx.unit+')':''}</td>
       <td style="padding:7px 8px;font-weight:700;color:${tx.type==='debt_pay'?'#059669':tx.type==='sell_debt'?'#dc2626':'#2563eb'};text-align:left">${fmtC(tx.amount,tx.currency)}</td>
     </tr>`).join('');
 
-  const win=window.open('','_blank');
+  const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html>
 <html lang="ckb" dir="rtl">
 <head>
@@ -349,59 +713,75 @@ td{padding:6px 8px;font-size:12px}
 <div class="header-box">
   <div class="shop-title">🏪 مامەڵەکانم</div>
   <div class="cust-sub">ناوی کڕیار: ${escHtml(cust.name)}${cust.phone?' · 📞 '+escHtml(cust.phone):''}</div>
-  <span class="pill ${hasDebt?'d':'ok'}">${hasDebt?`⚠️ قەرزی مانەوە: ${fmtC(debtIQD,'IQD')}`:'✅ هیچ قەرزێکت نییە'}</span>
+  <span class="pill ${hasDebt?'d':'ok'}">${hasDebt?`⚠️ قەرزی ماوە: ${fmtC(debtIQD,'IQD')}`:'✅ هیچ قەرزێکت نییە'}</span>
 </div>
 
 <div class="grid3">
-  <div class="sc info"><div>🛒</div><div class="sv tprimary">${fmtC(boughtIQD,'IQD')}</div><div class="sl">کۆی کڕین</div></div>
-  <div class="sc ${hasDebt?'bad':'ok'}"><div>${hasDebt?'⚠️':'✅'}</div><div class="sv ${hasDebt?'tbad':'tok'}">${fmtC(debtIQD,'IQD')}</div><div class="sl">قەرزی مانەوە</div></div>
+  <div class="sc info"><div>💰</div><div class="sv tprimary">${fmtC(boughtIQD,'IQD')}</div><div class="sl">کۆی کڕین</div></div>
+  <div class="sc ${hasDebt?'bad':'ok'}"><div>${hasDebt?'⚠️':'✅'}</div><div class="sv ${hasDebt?'tbad':'tok'}">${fmtC(debtIQD,'IQD')}</div><div class="sl">قەرزی ماوە</div></div>
   <div class="sc ok"><div>💳</div><div class="sv tok">${fmtC(paidIQD,'IQD')}</div><div class="sl">دراوەتەوە</div></div>
 </div>
 
-${hasDebt?`
+${hasDebt ? `
 <div class="sbox">
   <div class="srow"><span>کۆی قەرز</span><span class="tbad">${fmtC(fromUSD(cust.totalDebtUSD,'IQD'),'IQD')}</span></div>
   <div class="srow"><span style="color:#059669">✅ دراوەتەوە</span><span class="tok">${fmtC(paidIQD,'IQD')}</span></div>
-  <div class="stotal"><span>⚠️ مانەوە</span><span class="tbad">${fmtC(debtIQD,'IQD')}</span></div>
+  <div class="stotal"><span>⚠️ ماوە</span><span class="tbad">${fmtC(debtIQD,'IQD')}</span></div>
 </div>
 <div class="pbar"><div class="pfill" style="width:${cust.paidPct}%;background:${cust.paidPct>=100?'#059669':cust.paidPct>50?'#d97706':'#dc2626'}"></div></div>
 <div class="plbl">${fmtN(cust.paidPct,1)}% دراوەتەوە</div>
-`:''}
+` : ''}
 
 <div style="font-size:11px;font-weight:700;color:#666;margin:16px 0 8px;text-transform:uppercase;letter-spacing:.5px">📋 مێژووی هەموو مامەڵەکان</div>
 <table>
   <thead><tr><th>جۆر</th><th>بەروار</th><th>کاڵا</th><th style="text-align:left">بڕی پارە</th></tr></thead>
-  <tbody>${txsHTML||'<tr><td colspan="4" style="text-align:center;color:#999;padding:20px">هیچ مامەڵەیەک نییە</td></tr>'}</tbody>
+  <tbody>${txsHTML || '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px">هیچ مامەڵەیەک نییە</td></tr>'}</tbody>
 </table>
 
-<div class="footer">مامەڵەکانت · بەروار: ${printDate} · v2.2</div>
-</body></html>`);
+<div class="footer">مامەڵەکانت · بەروار: ${printDate} · v2.4</div>
+<\/body><\/html>`);
   win.document.close();
-  win.onload=()=>{ win.focus(); win.print(); };
+  win.onload = () => { win.focus(); win.print(); };
 }
 
-function switchTab(tab){ activeTab=tab; render(); window.scrollTo({top:document.querySelector('.tabs-wrap')?.offsetTop||0,behavior:'smooth'}); }
+function switchTab(tab) {
+  activeTab = tab;
+  if (tab === 'history') histPage = 1;
+  render();
+  window.scrollTo({ top: document.querySelector('.tabs-wrap')?.offsetTop || 0, behavior: 'smooth' });
+}
 
-function buildEvItem(tx){
-  const icons={sell_cash:'💵',sell_debt:'📝',debt_pay:'✅'};
-  const labels={sell_cash:'کڕینی نەقد',sell_debt:'کڕینی قەرز',debt_pay:'پارەدانەوە'};
-  const amtCls=tx.type==='debt_pay'?'tok':tx.type==='sell_debt'?'tbad':'tprimary';
-  const due=tx.dueDate?`<span class="badge b-warn" style="margin-right:4px">⏰ ${tx.dueDate}</span>`:'';
+function buildEvItem(tx) {
+  const icons  = { sell_cash:'💵', sell_debt:'🧾', debt_pay:'✅' };
+  const labels = { sell_cash:'کڕینی نەقد', sell_debt:'کڕینی قەرز', debt_pay:'پارەدانەوە' };
+  const amtCls = tx.type==='debt_pay' ? 'tok' : tx.type==='sell_debt' ? 'tbad' : 'tprimary';
+  const due    = tx.dueDate ? `<span class="badge b-warn" style="margin-right:4px">⏰ ${tx.dueDate}</span>` : '';
+  const disc   = tx.discountAmount > 0 ? `<span class="badge b-warn" style="margin-right:4px">🏷️</span>` : '';
   return `<div class="ev-item">
-    <div class="ev-icon">${icons[tx.type]||'📌'}</div>
+    <div class="ev-icon">${icons[tx.type]||'📝'}</div>
     <div class="ev-info">
-      <div class="ev-title">${labels[tx.type]}${tx.prod?' — '+escHtml(tx.prod):''}${tx.qty!=null?' ('+fmtN(tx.qty,2)+' '+tx.unit+')':''}</div>
-      <div class="ev-meta">${tx.date||''}${tx.note?' · '+escHtml(tx.note):''} ${due}</div>
+      <div class="ev-title">${labels[tx.type]||tx.type}${tx.prod?' — '+escHtml(tx.prod):''}${tx.qty!=null?' ('+fmtN(tx.qty,2)+' '+escHtml(tx.unit)+')':''}</div>
+      <div class="ev-meta">${tx.date||''}${tx.note?' · '+escHtml(tx.note):''} ${disc}${due}</div>
     </div>
     <div class="ev-amount ${amtCls}">${fmtC(tx.amount,tx.currency)}</div>
   </div>`;
 }
 
-function waIcon(){ return `<svg viewBox="0 0 24 24" width="19" height="19" fill="#fff" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`; }
+function waIcon() {
+  return `<svg viewBox="0 0 24 24" width="19" height="19" fill="#fff" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`;
+}
 
-function errPage(icon,title,msg){ return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;background:var(--bg)"><div style="text-align:center;max-width:360px"><div style="font-size:52px;margin-bottom:20px">${icon}</div><div style="font-size:19px;font-weight:800;color:#fff;margin-bottom:10px">${title}</div><div style="color:#6b7fa3;font-size:13px;line-height:1.9">${msg}</div></div></div>`; }
+function errPage(icon, title, msg) {
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;background:var(--bg)"><div style="text-align:center;max-width:360px"><div style="font-size:52px;margin-bottom:20px">${icon}</div><div style="font-size:19px;font-weight:800;color:#fff;margin-bottom:10px">${title}</div><div style="color:#6b7fa3;font-size:13px;line-height:1.9">${msg}</div></div></div>`;
+}
 
-render();
+bootCustomerPortal();
 </script>
+<script src="customer_patch.js"></script>
 </body>
 </html>
+
+
+
+
+
