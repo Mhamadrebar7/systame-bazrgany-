@@ -1,6 +1,6 @@
 ﻿// -*- coding: utf-8 -*-
 // ============================================================
-// data.js — سیستەمی داتا، پاشەکەوت و localStorage  v2.4
+// data.js — سیستەمی داتا، پاشەکەوت و IndexedDB/localStorage hybrid  v2.4
 // پشتیگیری بۆ utils.js و app.js و customer.html
 // ============================================================
 //
@@ -21,22 +21,40 @@
 // ===== DB =====
 // ============================================================
 const DB = {
-  get: k => {
-    try { return JSON.parse(localStorage.getItem('pm_' + k) || 'null'); } catch { return null; }
-  },
+  ready: () => PMStorage.ready(),
+  mode: () => PMStorage.mode(),
+  get: k => PMStorage.getSync(k),
   set: (k, v) => {
     try {
-      localStorage.setItem('pm_' + k, JSON.stringify(v));
+      const result = PMStorage.setSync(k, v);
+      if (window.AuthCloud && typeof window.AuthCloud.noteLocalMutation === 'function') {
+        window.AuthCloud.noteLocalMutation(k);
+      }
+      return result;
     } catch (e) {
-      console.error('localStorage quota exceeded:', e);
-      alert('⚠️ بیرەکەی براوزەر پڕە! داتاکە پاشەکەوت نەکرا.\nتکایە داتای کۆنەکان Export بکە، پاشان ڕیسێت بکە.');
+      console.error('Storage write failed:', e);
+      alert('⚠️ بیرەکەی براوزەر یان storage engine هەڵەی هەیە! داتاکە پاشەکەوت نەکرا.\nتکایە داتای کۆنەکان Export بکە، پاشان ڕیسێت بکە.');
       throw e;
     }
   },
   clear: () => {
-    Object.keys(localStorage).filter(k => k.startsWith('pm_')).forEach(k => localStorage.removeItem(k));
+    const result = PMStorage.clearSync();
+    if (window.AuthCloud && typeof window.AuthCloud.noteLocalMutation === 'function') {
+      window.AuthCloud.noteLocalMutation('*');
+    }
+    return result;
   }
 };
+
+function ensureCloudWriteAccess(actionLabel = 'ئەم گۆڕانکارییە') {
+  if (!window.AuthCloud || typeof window.AuthCloud.ensureCanWrite !== 'function') return true;
+  return window.AuthCloud.ensureCanWrite(actionLabel);
+}
+
+function ensureCloudAdminAccess(actionLabel = 'ئەم گۆڕانکارییە') {
+  if (!window.AuthCloud || typeof window.AuthCloud.ensureCanAdmin !== 'function') return true;
+  return window.AuthCloud.ensureCanAdmin(actionLabel);
+}
 
 // ============================================================
 // ===== CURRENCIES =====
@@ -146,6 +164,7 @@ function getCurrencies() {
 }
 
 function saveCurrencies(list) {
+  if (!ensureCloudWriteAccess('گۆڕینی دراوەکان')) return;
   const normalized = _normalizeCurrencyList(list);
   DB.set('currencies', normalized.list);
 }
@@ -171,15 +190,16 @@ function isCustomerEventType(type) {
 // ============================================================
 // ===== INIT =====
 // ============================================================
-function initData() {
+async function initData() {
+  await DB.ready();
   repairStoredCurrencies();
-  if (localStorage.getItem('pm_products') === null) DB.set('products', []);
-  if (localStorage.getItem('pm_events') === null) DB.set('events', []);
-  if (localStorage.getItem('pm_suppliers') === null) DB.set('suppliers', []);
-  if (localStorage.getItem('pm_customerTokens') === null) DB.set('customerTokens', {});
-  if (localStorage.getItem('pm_eventIndex') === null) DB.set('eventIndex', {});
-  if (localStorage.getItem('pm_customerCache') === null) DB.set('customerCache', {});
-  if (localStorage.getItem('pm_lastSyncAt') === null) DB.set('lastSyncAt', '');
+  if (DB.get('products') == null) DB.set('products', []);
+  if (DB.get('events') == null) DB.set('events', []);
+  if (DB.get('suppliers') == null) DB.set('suppliers', []);
+  if (DB.get('customerTokens') == null) DB.set('customerTokens', {});
+  if (DB.get('eventIndex') == null) DB.set('eventIndex', {});
+  if (DB.get('customerCache') == null) DB.set('customerCache', {});
+  if (DB.get('lastSyncAt') == null) DB.set('lastSyncAt', '');
 
   getDeviceId();
   checkStorageIntegrity();
@@ -253,11 +273,15 @@ function getOrCreateCustomerToken(buyer, phone) {
       name:      buyer       || '',
       phone:     normalPhone || '',
       createdAt: new Date().toISOString(),
+      expiresAt: '',
+      revokedAt: '',
+      updatedAt: new Date().toISOString(),
     };
     DB.set('customerTokens', registry);
   }
   if (buyer && registry[key].name !== buyer) {
     registry[key].name = buyer;
+    registry[key].updatedAt = new Date().toISOString();
     DB.set('customerTokens', registry);
   }
   return registry[key].token;
@@ -267,30 +291,99 @@ function getOrCreateCustomerToken(buyer, phone) {
 function makeCustomerToken(buyer, phone) {
   return getOrCreateCustomerToken(buyer, phone);
 }
-function _safeReadObjectStore(key, label) {
-  const storageKey = 'pm_' + key;
-  const raw = localStorage.getItem(storageKey);
-  if (!raw) return {};
 
+function getCustomerTokenRecord(token) {
+  if (!validateToken(token)) return null;
+  const registry = DB.get('customerTokens') || {};
+  const entry = Object.values(registry).find(item => item && item.token === token);
+  if (!entry) return null;
+  return {
+    ...entry,
+    name: entry.name || '',
+    phone: normalizePhone(entry.phone || ''),
+    token: entry.token || token,
+  };
+}
+
+function isCustomerTokenActive(entry, nowMs = Date.now()) {
+  if (!entry || typeof entry !== 'object' || !validateToken(entry.token || '')) return false;
+  if (entry.revokedAt) return false;
+  if (entry.expiresAt) {
+    const expiresAtMs = Date.parse(entry.expiresAt);
+    if (!Number.isNaN(expiresAtMs) && expiresAtMs < nowMs) return false;
+  }
+  return true;
+}
+
+function getCustomerTokenAccessState(token) {
+  if (!validateToken(token)) return { ok: false, code: 'invalid', entry: null };
+  const entry = getCustomerTokenRecord(token);
+  if (!entry) return { ok: false, code: 'missing', entry: null };
+  if (entry.revokedAt) return { ok: false, code: 'revoked', entry };
+  if (entry.expiresAt) {
+    const expiresAtMs = Date.parse(entry.expiresAt);
+    if (!Number.isNaN(expiresAtMs) && expiresAtMs < Date.now()) {
+      return { ok: false, code: 'expired', entry };
+    }
+  }
+  return { ok: true, code: 'active', entry };
+}
+
+function updateCustomerTokenAccess(token, updater) {
+  if (!ensureCloudWriteAccess('گۆڕینی لینکەکانی کڕیار')) return null;
+  if (!validateToken(token) || typeof updater !== 'function') return null;
+  const registry = DB.get('customerTokens') || {};
+  const key = Object.keys(registry).find(candidate => registry[candidate]?.token === token);
+  if (!key) return null;
+  const current = registry[key];
+  const next = updater({ ...current });
+  if (!next || typeof next !== 'object') return null;
+  next.phone = normalizePhone(next.phone || '');
+  next.updatedAt = new Date().toISOString();
+  registry[key] = next;
+  DB.set('customerTokens', registry);
+  invalidateCustomerCache(token);
+  buildCustomerEventIndex();
+  return registry[key];
+}
+
+function revokeCustomerToken(token) {
+  return updateCustomerTokenAccess(token, entry => ({ ...entry, revokedAt: new Date().toISOString() }));
+}
+
+function restoreCustomerToken(token) {
+  return updateCustomerTokenAccess(token, entry => ({ ...entry, revokedAt: '' }));
+}
+
+function setCustomerTokenExpiryDays(token, days) {
+  const parsedDays = parseInt(days, 10);
+  if (!(parsedDays > 0)) return null;
+  const expiresAt = new Date(Date.now() + parsedDays * 86400000).toISOString();
+  return updateCustomerTokenAccess(token, entry => ({ ...entry, expiresAt, revokedAt: '' }));
+}
+
+function clearCustomerTokenExpiry(token) {
+  return updateCustomerTokenAccess(token, entry => ({ ...entry, expiresAt: '' }));
+}
+function _safeReadObjectStore(key, label) {
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = DB.get(key);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       console.warn(`[${label}] invalid shape, resetting`);
-      localStorage.setItem(storageKey, '{}');
+      DB.set(key, {});
       return {};
     }
     return parsed;
   } catch (e) {
     console.warn(`[${label}] corrupted store, resetting`, e);
-    localStorage.setItem(storageKey, '{}');
+    DB.set(key, {});
     return {};
   }
 }
 
 function _safeWriteObjectStore(key, value, label) {
-  const storageKey = 'pm_' + key;
   try {
-    localStorage.setItem(storageKey, JSON.stringify(value || {}));
+    DB.set(key, value || {});
   } catch (e) {
     console.warn(`[${label}] failed to write`, e);
   }
@@ -388,6 +481,7 @@ function buildCustomerEventIndex() {
 
 function getCustomerEventIds(token) {
   if (!token || !validateToken(token)) return [];
+  if (!getCustomerTokenAccessState(token).ok) return [];
 
   let index = _safeReadObjectStore('eventIndex', 'pm_eventIndex');
   const hasIndex = index && typeof index === 'object' && !Array.isArray(index);
@@ -438,6 +532,7 @@ function _isFullCustomerSummary(summary) {
 
 function getCustomerDebtSummaryCached(token) {
   if (!token || !validateToken(token)) return null;
+  if (!getCustomerTokenAccessState(token).ok) return null;
 
   const cache = _safeGetCustomerCacheStore();
   const entry = cache[token];
@@ -533,28 +628,26 @@ function createBackupSnapshot(exportedAt = new Date().toISOString()) {
 }
 
 function _writeStorageKey(key, value) {
-  localStorage.setItem(`pm_${key}`, JSON.stringify(value));
+  DB.set(key, value);
 }
 
 function _readIntegrityStore(key, fallback, validator) {
-  const storageKey = `pm_${key}`;
-  const raw = localStorage.getItem(storageKey);
-
-  if (raw == null) {
+  const current = DB.get(key);
+  if (current == null) {
     _writeStorageKey(key, fallback);
     return { value: fallback, repaired: true };
   }
 
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = current;
     if (!validator(parsed)) {
-      console.warn(`[checkStorageIntegrity] reset ${storageKey}: invalid shape`);
+      console.warn(`[checkStorageIntegrity] reset pm_${key}: invalid shape`);
       _writeStorageKey(key, fallback);
       return { value: fallback, repaired: true };
     }
     return { value: parsed, repaired: false };
   } catch (e) {
-    console.warn(`[checkStorageIntegrity] reset ${storageKey}: corrupted JSON`, e);
+    console.warn(`[checkStorageIntegrity] reset pm_${key}: corrupted JSON`, e);
     _writeStorageKey(key, fallback);
     return { value: fallback, repaired: true };
   }
@@ -818,12 +911,12 @@ function _getCustomerEventsForToken(token, allEvents, regEntry, preferIndex = tr
 function silentAutoBackup() {
   try {
     const snap = createBackupSnapshot();
-    const current = localStorage.getItem('pm_autobackup');
+    const current = DB.get('autobackup');
     if (current) {
-      localStorage.setItem('pm_autobackup_prev', current);
+      DB.set('autobackup_prev', current);
     }
-    localStorage.setItem('pm_autobackup', JSON.stringify(snap));
-    localStorage.setItem('pm_autobackup_date', new Date().toLocaleString('en-GB'));
+    DB.set('autobackup', snap);
+    DB.set('autobackup_date', new Date().toLocaleString('en-GB'));
     console.debug(`[AutoBackup] v${APP_VERSION} ✅`, snap.savedAt.slice(0, 16));
   } catch (e) {
     console.warn('[AutoBackup] هەڵە:', e.message);
@@ -838,6 +931,7 @@ function getProducts()      { return DB.get('products') || []; }
 function saveProducts(list) { DB.set('products', list); }
 
 function addProduct(data) {
+  if (!ensureCloudWriteAccess('زیادکردنی کاڵا')) return null;
   const prods = getProducts();
   const prod  = {
     id:          nextId(),
@@ -862,6 +956,7 @@ function getProduct(id) {
 }
 
 function updateProduct(id, data) {
+  if (!ensureCloudWriteAccess('دەستکاریکردنی کاڵا')) return null;
   const prods = getProducts();
   const p     = prods.find(x => x.id == id);
   if (!p) return null;
@@ -878,6 +973,7 @@ function updateProduct(id, data) {
 
 // product.qty تەنها بۆ پشتیوانیی داتای کۆنە
 function updateProductQty(id, delta) {
+  if (!ensureCloudWriteAccess('گۆڕینی بڕی کاڵا')) return null;
   invalidateStatsCache();
   const prods = getProducts();
   const p     = prods.find(x => x.id == id);
@@ -1030,6 +1126,7 @@ function getExpenseSummary(opts = {}) {
 }
 
 function addEvent(data) {
+  if (!ensureCloudWriteAccess('تۆمارکردنی مامەڵە')) return null;
   invalidateStatsCache();
   const events = DB.get('events') || [];
 
@@ -1120,6 +1217,7 @@ function addEvent(data) {
 }
 
 function delEvent(id) {
+  if (!ensureCloudWriteAccess('سڕینەوەی مامەڵە')) return null;
   invalidateStatsCache();
   const events = DB.get('events') || [];
   const ev     = events.find(e => e.id == id);
@@ -1136,6 +1234,7 @@ function delEvent(id) {
 // ============================================================
 function getSuppliers() { return DB.get('suppliers') || []; }
 function addSupplier(name, phone) {
+  if (!ensureCloudWriteAccess('زیادکردنی فرۆشیار')) return getSuppliers();
   const s = [...getSuppliers(), { id: nextId(), name, phone: phone || '' }];
   DB.set('suppliers', s);
   return s;
@@ -1380,41 +1479,49 @@ function exportData() {
 // ============================================================
 // ===== IMPORT =====
 // ============================================================
+function applyBackupPayload(parsed, opts = {}) {
+  const { sanitized, preview } = validateBackupPayload(parsed);
+  const requireConfirm = opts.requireConfirm !== false;
+
+  if (requireConfirm && !confirm(_buildImportPreviewMessage(preview))) {
+    const cancelErr = new Error('هاوردەکردن هەڵوەشایەوە.');
+    cancelErr.code = 'IMPORT_CANCELLED';
+    throw cancelErr;
+  }
+
+  saveCurrencies(sanitized.currencies);
+  DB.set('products', sanitized.products);
+  DB.set('events', sanitized.events);
+  DB.set('suppliers', sanitized.suppliers);
+  DB.set('customerTokens', sanitized.customerTokens);
+  DB.set('eventIndex', sanitized.eventIndex);
+  DB.set('customerCache', sanitized.customerCache);
+  setLastSyncAt(preview.lastSyncAt || sanitized.exportedAt || '');
+
+  repairCustomerRegistry();
+  _migrateOrphanedTokens();
+  reconcileLegacyProductStock();
+  buildCustomerEventIndex();
+  invalidateAllCustomerCache();
+  invalidateStatsCache();
+  silentAutoBackup();
+
+  return {
+    ...sanitized,
+    preview,
+  };
+}
+
 function importData(file) {
+  if (!ensureCloudAdminAccess('هاوردەکردنی داتا')) {
+    return Promise.reject(new Error('ئەم کارە تەنها بۆ admin ڕێگەپێدراوە.'));
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
       try {
         const parsed = JSON.parse(e.target.result);
-        const { sanitized, preview } = validateBackupPayload(parsed);
-
-        if (!confirm(_buildImportPreviewMessage(preview))) {
-          const cancelErr = new Error('هاوردەکردن هەڵوەشایەوە.');
-          cancelErr.code = 'IMPORT_CANCELLED';
-          throw cancelErr;
-        }
-
-        saveCurrencies(sanitized.currencies);
-        DB.set('products', sanitized.products);
-        DB.set('events', sanitized.events);
-        DB.set('suppliers', sanitized.suppliers);
-        DB.set('customerTokens', sanitized.customerTokens);
-        DB.set('eventIndex', sanitized.eventIndex);
-        DB.set('customerCache', sanitized.customerCache);
-        setLastSyncAt(preview.lastSyncAt || sanitized.exportedAt || '');
-
-        repairCustomerRegistry();
-        _migrateOrphanedTokens();
-        reconcileLegacyProductStock();
-        buildCustomerEventIndex();
-        invalidateAllCustomerCache();
-
-        invalidateStatsCache();
-        silentAutoBackup();
-        resolve({
-          ...sanitized,
-          preview,
-        });
+        resolve(applyBackupPayload(parsed, { requireConfirm: true }));
       } catch (err) {
         reject(err);
       }
@@ -1423,6 +1530,8 @@ function importData(file) {
     reader.readAsText(file);
   });
 }
+
+window.applyBackupPayload = applyBackupPayload;
 
 // ============================================================
 // ===== EXPORT CSV — کاڵاکان =====
@@ -1618,10 +1727,12 @@ function getDebtDueAlerts() {
 // ============================================================
 function getCustomerDebtSummary(token, opts = {}) {
   if (!token || !validateToken(token)) return null;
+  const access = getCustomerTokenAccessState(token);
+  if (!access.ok) return null;
 
   const allEvs = getAllEvents();
   const prods  = getProducts();
-  const reg    = lookupCustomerByToken(token);
+  const reg    = access.entry || lookupCustomerByToken(token);
   const preferIndex = opts.preferIndex !== false;
 
   const myEvs = Array.isArray(opts.events)

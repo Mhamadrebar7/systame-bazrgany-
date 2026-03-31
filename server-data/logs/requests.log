@@ -1,0 +1,5 @@
+{"at":"2026-03-30T10:02:56.658Z","type":"request","method":"GET","pathname":"/api/health","statusCode":200,"durationMs":6,"username":""}
+{"at":"2026-03-30T10:21:34.703Z","type":"request","method":"GET","pathname":"/api/health","statusCode":200,"durationMs":3,"username":""}
+{"at":"2026-03-30T10:21:34.725Z","type":"request","method":"OPTIONS","pathname":"/api/auth/login","statusCode":204,"durationMs":0,"username":""}
+{"at":"2026-03-30T10:23:05.868Z","type":"request","method":"GET","pathname":"/api/health","statusCode":200,"durationMs":59,"username":""}
+{"at":"2026-03-30T10:23:07.966Z","type":"request","method":"OPTIONS","pathname":"/api/auth/login","statusCode":204,"durationMs":0,"username":""}

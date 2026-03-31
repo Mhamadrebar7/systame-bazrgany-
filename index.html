@@ -4,52 +4,67 @@
 <html lang="ckb" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>بەڕێوەبردنی کاڵا</title>
-<link rel="icon" href="data:,">
+<meta name="description" content="سیستەمی بەڕێوەبردنی کاڵا، قازانج، خەرجی و کڕیار بە شێوەیەکی خێرا و ئۆفلاین.">
+<meta name="application-name" content="بەڕێوەبردنی کاڵا">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="بەڕێوەبردنی کاڵا">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="skip-link" href="#mainContent">بازدان بۆ ناوەڕۆک</a>
 
 <!-- MOBILE OVERLAY -->
-<div class="sidebar-overlay" onclick="closeSidebar()"></div>
+<button class="sidebar-overlay" type="button" onclick="closeSidebar()" aria-label="داخستنی مێنیو" hidden></button>
 
 <!-- SIDEBAR -->
-<div class="sidebar">
+<aside class="sidebar" id="appSidebar" aria-label="مێنیوی سەرەکی" aria-hidden="false">
   <div class="sb-logo">
     <div class="ico">📦</div>
     <div style="flex:1"><h1>بەڕێوەبردنی کاڵا</h1><small>سیستەمی ئابووری v2.4</small></div>
-    <button class="menu-btn sb-close-btn" onclick="closeSidebar()">✕</button>
+    <button class="menu-btn sb-close-btn" type="button" onclick="closeSidebar()" aria-label="داخستنی مێنیو">✕</button>
   </div>
-  <div class="nav-sec">
+  <nav class="nav-sec" aria-label="بەشەکانی سیستەم">
     <div class="nav-ttl">سەرەکی</div>
-    <div class="nav-i active" onclick="showPage('dashboard')"><span class="ico">📊</span>داشبۆرد</div>
+    <button class="nav-i active" type="button" data-page="dashboard" onclick="showPage('dashboard')" aria-current="page"><span class="ico">📊</span>داشبۆرد</button>
     <div class="nav-ttl">کاڵاکان</div>
-    <div class="nav-i" onclick="showPage('products')"><span class="ico">📦</span>هەموو کاڵاکان</div>
-    <div class="nav-i" onclick="showPage('addProduct')"><span class="ico">➕</span>کاڵای نوێ</div>
+    <button class="nav-i" type="button" data-page="products" onclick="showPage('products')"><span class="ico">📦</span>هەموو کاڵاکان</button>
+    <button class="nav-i" type="button" data-page="addProduct" onclick="showPage('addProduct')"><span class="ico">➕</span>کاڵای نوێ</button>
     <div class="nav-ttl">ئابووری</div>
-    <div class="nav-i" onclick="showPage('profits')"><span class="ico">📈</span>قازانج و زەرەر</div>
-    <div class="nav-i" onclick="showPage('expenses')"><span class="ico">💸</span>خەرجییەکان</div>
+    <button class="nav-i" type="button" data-page="profits" onclick="showPage('profits')"><span class="ico">📈</span>قازانج و زەرەر</button>
+    <button class="nav-i" type="button" data-page="expenses" onclick="showPage('expenses')"><span class="ico">💸</span>خەرجییەکان</button>
     <div class="nav-ttl">ڕێکخستن</div>
-    <div class="nav-i" onclick="showPage('currencies')"><span class="ico">💱</span>دراوەکان</div>
-    <div class="nav-i" onclick="showPage('suppliers')"><span class="ico">🏪</span>فرۆشیارەکان</div>
-    <div class="nav-i" onclick="showPage('customers')"><span class="ico">👥</span>کڕیارەکان</div>
-    <div class="nav-i" onclick="showPage('settings')"><span class="ico">⚙️</span>ڕێکخستن و پشتیوانی</div>
-  </div>
+    <button class="nav-i" type="button" data-page="currencies" onclick="showPage('currencies')"><span class="ico">💱</span>دراوەکان</button>
+    <button class="nav-i" type="button" data-page="suppliers" onclick="showPage('suppliers')"><span class="ico">🏪</span>فرۆشیارەکان</button>
+    <button class="nav-i" type="button" data-page="customers" onclick="showPage('customers')"><span class="ico">👥</span>کڕیارەکان</button>
+    <button class="nav-i" type="button" data-page="settings" onclick="showPage('settings')"><span class="ico">⚙️</span>ڕێکخستن و پشتیوانی</button>
+  </nav>
   <div class="sb-foot">
     <div style="font-size:10px;color:var(--faint);text-align:center">نسخە ٢.٤</div>
   </div>
-</div>
+</aside>
 
 <!-- MAIN -->
-<div class="main">
+<main class="main" id="mainContent" tabindex="-1">
+  <div class="topbar">
+    <h2 id="pageTitle">📊 داشبۆرد</h2>
+    <div class="topbar-right">
+      <button class="btn btn-ol btn-sm" id="installAppBtn" data-install-app type="button" onclick="installAppPrompt(this)" hidden aria-hidden="true">⬇️ دامەزراندن</button>
+    </div>
+  </div>
   <!-- ====== LOW STOCK BANNER ====== -->
-  <div style="padding:8px 16px 0" id="lowStockBanner"></div>
-  <div style="padding:0 16px" id="debtDueBanner"></div>
+  <div style="padding:8px 16px 0" id="lowStockBanner" role="status" aria-live="polite"></div>
+  <div style="padding:0 16px" id="debtDueBanner" role="status" aria-live="polite"></div>
   <!-- دوگمەی مۆبایل -->
-  <button class="mobile-menu-fab" onclick="openSidebar()">☰</button>
+  <button class="mobile-menu-fab" type="button" data-sidebar-toggle onclick="openSidebar()" aria-label="کردنەوەی مێنیو" aria-controls="appSidebar" aria-expanded="false">☰</button>
 
   <!-- ====== DASHBOARD ====== -->
   <div class="page active" id="pg-dashboard">
@@ -110,6 +125,7 @@
         <span class="prod-search-ico">🔎</span>
         <input type="search" id="prodSearchInput" placeholder="گەڕان..."
           oninput="searchProducts(this.value)"
+          aria-label="گەڕان لە کاڵاکان"
           class="prod-search-input">
       </div>
       <div class="prod-filters">
@@ -363,6 +379,11 @@
     <div id="settingsAlert"></div>
 
     <div class="card">
+      <div class="ctitle">☁️ کلاود و هەژمارەکان</div>
+      <div id="cloudStatusPanel"></div>
+    </div>
+
+    <div class="card">
       <div class="ctitle">📤 هاوردە و ناردنەوە</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
         <button class="btn btn-p" onclick="doExport()">💾 Export JSON (پشتیوانی)</button>
@@ -390,39 +411,61 @@
       <div class="ctitle">ℹ️ دەربارەی</div>
       <p style="color:var(--muted);font-size:13px;line-height:2">
         سیستەمی بەڕێوەبردنی کاڵا · نسخە ٢.٤<br>
-        داتاکان لە بڕاوزەرەکەت پاشەکەوت دەبن (localStorage)
+        داتاکان لە بیرگەی ئۆفلاینی بڕاوزەر پاشەکەوت دەبن (IndexedDB)
       </p>
     </div>
   </div>
 
-</div><!-- /main -->
+</main><!-- /main -->
 
 <!-- SCRIPTS — ئەوردەر گرنگە -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="utils.js"></script>
 <script src="data.js"></script>
+<script src="cloud.js"></script>
 <script src="app.js"></script>
 <script src="codex_patch.js"></script>
 <script>
-  // INIT
-  try {
-    initData();
-    fillCurrencySelects();
-    fillSupplierSelect();
-    renderDash();
-    renderLowStockBanner();
-    renderDebtDueBanner();
-  } catch(e) {
-    console.error('Init failed:', e);
-    document.querySelector('.main').innerHTML =
-      '<div style="padding:2rem;text-align:center;direction:rtl">' +
-      '<div style="font-size:2rem;margin-bottom:1rem">⚠️</div>' +
-      '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#f87171">هەڵەی سیستەم</div>' +
-      '<div style="font-size:13px;color:#8896b3;margin-bottom:1.5rem">' + e.message + '</div>' +
-      '<button onclick="localStorage.clear();location.reload()" ' +
-      'style="padding:10px 24px;border-radius:8px;border:none;background:#f87171;color:#fff;font-size:14px;cursor:pointer;font-family:inherit">' +
-      '🗑️ ڕیسێت و دووبارەبارکردن</button></div>';
+  async function hardResetAndReload() {
+    try {
+      if (window.DB && typeof window.DB.clear === 'function') {
+        await Promise.resolve(window.DB.clear());
+      } else if (window.PMStorage && typeof window.PMStorage.clearSync === 'function') {
+        await Promise.resolve(window.PMStorage.clearSync());
+      } else {
+        localStorage.clear();
+      }
+    } catch (resetErr) {
+      console.error('Hard reset failed:', resetErr);
+      try { localStorage.clear(); } catch (_) {}
+    } finally {
+      location.reload();
+    }
   }
+
+  (async () => {
+    try {
+      await initData();
+      if (window.AuthCloud && typeof window.AuthCloud.boot === 'function') {
+        await window.AuthCloud.boot();
+      }
+      fillCurrencySelects();
+      fillSupplierSelect();
+      renderDash();
+      renderLowStockBanner();
+      renderDebtDueBanner();
+    } catch(e) {
+      console.error('Init failed:', e);
+      document.querySelector('.main').innerHTML =
+        '<div style="padding:2rem;text-align:center;direction:rtl">' +
+        '<div style="font-size:2rem;margin-bottom:1rem">⚠️</div>' +
+        '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#f87171">هەڵەی سیستەم</div>' +
+        '<div style="font-size:13px;color:#8896b3;margin-bottom:1.5rem">' + e.message + '</div>' +
+        '<button onclick="hardResetAndReload()" ' +
+        'style="padding:10px 24px;border-radius:8px;border:none;background:#f87171;color:#fff;font-size:14px;cursor:pointer;font-family:inherit">' +
+        '🗑️ ڕیسێت و دووبارەبارکردن</button></div>';
+    }
+  })();
 
   // MODAL CLOSE
   document.addEventListener('keydown', e => { if(e.key==='Escape') closeSidebar(); });
@@ -439,9 +482,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-

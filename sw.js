@@ -1,9 +1,12 @@
-﻿const CACHE_NAME = 'pm-app-cache-v2';
+const CACHE_NAME = 'pm-app-cache-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',
+  './manifest.json',
+  './icon.svg',
   './style.css',
   './app.js',
+  './cloud.js',
   './data.js',
   './utils.js',
   './customer.html',

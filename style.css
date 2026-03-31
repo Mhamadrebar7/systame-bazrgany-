@@ -31,6 +31,27 @@
 
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; direction:rtl; font-size:14px; overflow-x:hidden; }
+button, input, select, textarea { font:inherit; }
+
+.skip-link {
+  position:fixed;
+  top:10px;
+  right:10px;
+  z-index:1000;
+  padding:10px 14px;
+  border-radius:10px;
+  background:var(--primary);
+  color:#fff;
+  text-decoration:none;
+  transform:translateY(-160%);
+  transition:transform .2s ease;
+}
+.skip-link:focus { transform:translateY(0); }
+
+:where(button, [href], input, select, textarea):focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
 
 /* SCROLLBAR */
 ::-webkit-scrollbar { width:5px; height:5px; }
@@ -50,14 +71,19 @@ body { font-family:'Noto Sans Arabic',sans-serif; background:var(--bg); color:va
 .sb-logo small { font-size:10px; color:var(--muted); }
 .nav-sec { padding:8px 0; }
 .nav-ttl { padding:10px 16px 4px; font-size:9px; font-weight:700; letter-spacing:1.5px; color:var(--faint); text-transform:uppercase; }
-.nav-i { display:flex; align-items:center; gap:9px; padding:9px 16px; cursor:pointer; font-size:13px; color:var(--muted); transition:all .15s; border-right:2px solid transparent; margin:1px 0; }
+.nav-i {
+  display:flex; align-items:center; gap:9px; padding:9px 16px; cursor:pointer; font-size:13px;
+  color:var(--muted); transition:all .15s; border-right:2px solid transparent; margin:1px 0;
+  width:100%; background:none; border-top:none; border-left:none; border-bottom:none;
+  text-align:right; font-family:inherit;
+}
 .nav-i:hover { background:var(--bg3); color:var(--text); }
 .nav-i.active { background:rgba(79,142,247,.1); color:var(--primary); border-right-color:var(--primary); }
 .nav-i .ico { font-size:15px; width:20px; text-align:center; }
 .sb-foot { margin-top:auto; padding:12px; border-top:1px solid var(--border); }
 
 /* MOBILE SIDEBAR OVERLAY */
-.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:199; backdrop-filter:blur(2px); }
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:199; backdrop-filter:blur(2px); border:none; padding:0; }
 
 /* ===== MAIN ===== */
 .main { margin-right:var(--sw); min-height:100vh; transition:margin .3s; }

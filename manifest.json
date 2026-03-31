@@ -1,0 +1,20 @@
+{
+  "name": "بەڕێوەبردنی کاڵا",
+  "short_name": "کاڵا",
+  "description": "سیستەمی بەڕێوەبردنی کاڵا، قازانج، خەرجی و کڕیار بە شێوەیەکی خێرا و ئۆفلاین.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "lang": "ckb",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

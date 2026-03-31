@@ -59,12 +59,35 @@ function formatDueDate(dueDate) {
   return dueDate;
 }
 
+function syncSidebarAccessibility(isOpen = document.querySelector('.sidebar')?.classList.contains('mobile-open')) {
+  const sb = document.querySelector('.sidebar');
+  const ov = document.querySelector('.sidebar-overlay');
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  const expanded = Boolean(isMobile && isOpen);
+
+  if (sb) sb.setAttribute('aria-hidden', expanded || !isMobile ? 'false' : 'true');
+  if (ov) ov.hidden = !expanded;
+  document.querySelectorAll('[data-sidebar-toggle]').forEach(btn => {
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  });
+
+  if (!isMobile) {
+    if (sb) {
+      sb.classList.remove('mobile-open');
+      sb.style.transform = '';
+    }
+    if (ov) ov.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
 function openSidebar() {
   const sb = document.querySelector('.sidebar');
   const ov = document.querySelector('.sidebar-overlay');
   if (sb) { sb.classList.add('mobile-open'); sb.style.transform = 'translateX(0)'; }
   if (ov) ov.classList.add('show');
   document.body.style.overflow = 'hidden';
+  syncSidebarAccessibility(true);
 }
 function closeSidebar() {
   const sb = document.querySelector('.sidebar');
@@ -72,6 +95,7 @@ function closeSidebar() {
   if (sb) { sb.classList.remove('mobile-open'); sb.style.transform = ''; }
   if (ov) ov.classList.remove('show');
   document.body.style.overflow = '';
+  syncSidebarAccessibility(false);
 }
 
 // ============================================================
@@ -79,11 +103,15 @@ function closeSidebar() {
 // ============================================================
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-i').forEach(n => n.classList.remove('active'));
   const pg = el('pg-' + name); if (pg) pg.classList.add('active');
-  const pt = el('pageTitle'); if (pt) pt.textContent = PAGE_TITLES[name] || name;
+  const pageTitle = PAGE_TITLES[name] || name;
+  const pt = el('pageTitle'); if (pt) pt.textContent = pageTitle;
+  document.title = `${pageTitle} | بەڕێوەبردنی کاڵا`;
   document.querySelectorAll('.nav-i').forEach(n => {
-    if ((n.getAttribute('onclick') || '').includes("'" + name + "'")) n.classList.add('active');
+    const active = n.dataset.page === name;
+    n.classList.toggle('active', active);
+    if (active) n.setAttribute('aria-current', 'page');
+    else n.removeAttribute('aria-current');
   });
   closeSidebar();
   const fns = {
@@ -94,6 +122,9 @@ function showPage(name) {
   };
   if (fns[name]) fns[name]();
 }
+
+window.addEventListener('resize', () => syncSidebarAccessibility());
+syncSidebarAccessibility();
 
 // ===== FILL SELECTS =====
 function fillCurrencySelects() {
@@ -321,6 +352,7 @@ function goExpensePage(n) {
 }
 
 function doAddExpense() {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('زیادکردنی خەرجی')) return;
   const category = v('expCategory').trim();
   const amount = fv('expAmount');
   const currency = v('expCurrency') || 'USD';
@@ -525,7 +557,7 @@ function renderDash() {
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap">
             <button class="btn btn-xs btn-g" onclick="copyLink('${link}')">🔗 لینک</button>
-            ${waLink?`<a href="${waLink}" target="_blank" class="btn btn-xs" style="background:#25d366;color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:4px">واتساپ</a>`:''}
+        ${waLink?`<a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn btn-xs" style="background:#25d366;color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:4px">واتساپ</a>`:''}
           </div>
         </div>`;
       }).join('')
@@ -840,6 +872,7 @@ function apCalcFromUSD() {
 
 function doAddProduct() {
   if (isAddingProduct) return;
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('زیادکردنی کاڵا')) return;
 
   const name = v('apName').trim();
   if (!name) return showA('addProdAlert', 'bad', 'ناوی کاڵا داخڵ بکە');
@@ -1260,6 +1293,7 @@ function _showLoadPreview(id, totalPrice, curr, usd, rate) {
 }
 
 function saveLoad(id) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('زیادکردنی بار')) return;
   const qty = parseFloat(el('ev-qty-'+id)?.value) || 0;
   const totalPrice = parseFloat(el('ev-uprice-'+id)?.value) || 0;
   const curr = el('ev-curr-'+id)?.value || 'IQD';
@@ -1346,6 +1380,7 @@ function renderProdCosts(id, p, s) {
 }
 
 function saveCost(id, type) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('تۆمارکردنی خەرجیی کاڵا')) return;
   const isShip = (type === 'shipping');
   const prefix = isShip ? 'ev-ship' : 'ev-tax';
   const { amt, curr, rate } = calcDualPreview(prefix, id);
@@ -1357,6 +1392,7 @@ function saveCost(id, type) {
 }
 
 function saveExtra(id, type) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('تۆمارکردنی خەرجیی زیادە')) return;
   const prefix = `ev-${type}`;
   const { amt, curr, rate } = calcDualPreview(prefix, id);
   const date = el(`${prefix}date-${id}`)?.value || today();
@@ -1504,7 +1540,7 @@ function renderProdSell(id, p, s) {
         <div style="font-size:11px;color:var(--muted);margin-bottom:5px">کڕیارەکانی پێشوو:</div>
         <div style="display:flex;flex-wrap:wrap;gap:5px">
           ${prevCustomers.map(c => `<button type="button" class="btn btn-xs btn-g" data-cname="${escHtml(c.name)}" data-cphone="${escHtml(c.phone)}" onclick="fillSellCustomer(${id},this.dataset.cname,this.dataset.cphone)">
-            ${escHtml(c.name)}${c.phone?' â€¢ '+escHtml(c.phone):''}
+            ${escHtml(c.name)}${c.phone?' • '+escHtml(c.phone):''}
           </button>`).join('')}
         </div>
       </div>` : '';
@@ -1705,6 +1741,7 @@ function evCalcSell(id) {
 }
 
 function saveSell(id) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('تۆمارکردنی فرۆشتن')) return;
   const qty = parseFloat(el('ev-sqty-'+id)?.value) || 0;
   const pr = parseFloat(el('ev-sprice-'+id)?.value) || 0;
   const curr = el('ev-scurr-'+id)?.value || 'IQD';
@@ -1830,7 +1867,7 @@ function renderProdDebt(id, p, s) {
       <div style="background:var(--bg2);border:1px dashed var(--border2);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--muted);word-break:break-all;margin-bottom:8px;font-family:monospace;direction:ltr;text-align:left;cursor:pointer;user-select:all" onclick="copyLink('${safeLink}',this.nextElementSibling.querySelector('button'))" title="کلیک بکە بۆ کۆپیکردن">${link}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-p btn-sm" style="flex:1;font-size:12px;padding:8px 10px" onclick="copyLink('${safeLink}',this)">🔗 کۆپیکردنی لینک</button>
-        ${waLink?`<a href="${waLink}" target="_blank" class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;text-decoration:none;justify-content:center;display:flex;align-items:center;gap:5px;padding:8px 10px;border-radius:var(--rs);font-size:12px;font-weight:700;font-family:inherit">واتساپ</a>`:''}
+        ${waLink?`<a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;text-decoration:none;justify-content:center;display:flex;align-items:center;gap:5px;padding:8px 10px;border-radius:var(--rs);font-size:12px;font-weight:700;font-family:inherit">واتساپ</a>`:''}
       </div>
     </div>`;
   }).join('') : '';
@@ -1905,6 +1942,7 @@ function fillDebtPay(id, buyer, phone, owedUSD) {
 }
 
 function saveDebtPay(id) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('تۆمارکردنی پارەدانەوە')) return;
   const amt = parseFloat(el('ev-dp-'+id)?.value) || 0;
   const date = el('ev-dpdate-'+id)?.value || '';
   const buyer = el('ev-dpbuyer-'+id)?.value?.trim() || '';
@@ -2183,6 +2221,7 @@ function refreshProdCard(id, tab) {
 }
 
 function delEvAndRefresh(evId, prodId, tab) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('سڕینەوەی مامەڵە')) return;
   if (!confirm('دڵنیایت؟')) return;
   const ev = delEvent(evId);
   if (ev && ev.type === 'load') updateProductQty(prodId, -(parseFloat(ev.qty)||0));
@@ -2191,6 +2230,7 @@ function delEvAndRefresh(evId, prodId, tab) {
 }
 
 function delProd(id) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('سڕینەوەی کاڵا')) return;
   if (!confirm('دڵنیایت؟ هەموو داتای ئەم کاڵایە دەسڕێتەوە!')) return;
   saveProducts(getProducts().filter(p => p.id != id));
   DB.set('events', getAllEvents().filter(e => e.productId != id));
@@ -2359,6 +2399,7 @@ function renderCurrencies() {
 }
 
 function updateRate(code, val) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('نوێکردنەوەی نرخی دراو')) return;
   const list = getCurrencies();
   const c    = list.find(x => x.code === code);
   if (c) c.rateToUSD = parseFloat(val) || 1;
@@ -2373,6 +2414,7 @@ function delCurr(code) {
 }
 
 function addCurrency() {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('زیادکردنی دراو')) return;
   const code = v('nCCode').trim().toUpperCase(), name = v('nCName').trim();
   if (!code || !name) return showA('currAlert','bad','کۆد و ناو داخڵ بکە');
   const list = getCurrencies();
@@ -2384,6 +2426,7 @@ function addCurrency() {
 }
 
 async function fetchLiveRates() {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('نوێکردنەوەی نرخەکان')) return;
   const btn     = el('btnFetchRates');
   const alertEl = el('fetchRateAlert');
   if (btn) { btn.disabled = true; btn.textContent = 'نوێکردنەوە...'; }
@@ -2438,6 +2481,7 @@ function renderSuppliers() {
     : `<div class="empty">هیچ فرۆشیارێک نییە</div>`;
 }
 function doAddSupplier() {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('زیادکردنی فرۆشیار')) return;
   const n = v('suppName').trim(); if (!n) return showA('suppAlert','bad','ناوی فرۆشیار داخڵ بکە');
   const phone = v('suppPhone').trim();
   addSupplier(n, phone);
@@ -2445,6 +2489,7 @@ function doAddSupplier() {
   showA('suppAlert','ok','✅ زیادکرا'); renderSuppliers(); fillSupplierSelect();
 }
 function delSupplier(id) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('سڕینەوەی فرۆشیار')) return;
   DB.set('suppliers', getSuppliers().filter(s => s.id != id));
   renderSuppliers(); fillSupplierSelect();
 }
@@ -2481,7 +2526,11 @@ function fallbackCopy(url, btn) {
 // ============================================================
 // ===== SETTINGS PAGE =====
 // ============================================================
-function renderSettings() { /* renders inline in HTML */ }
+function renderSettings() {
+  if (window.AuthCloud && typeof window.AuthCloud.renderSettingsPanel === 'function') {
+    window.AuthCloud.renderSettingsPanel();
+  }
+}
 
 // ============================================================
 // ===== کڕیارەکان =====
@@ -2531,6 +2580,65 @@ function getCustomerStats() {
     .sort((a, b) => b.remainUSD - a.remainUSD || b.totalUSD - a.totalUSD);
 }
 
+function getCustomerLinkStateInfo(token) {
+  if (!token) {
+    return { label: 'بێ لینک', className: 'b-gray', detail: 'هێشتا token دروست نەکراوە.' };
+  }
+
+  const access = getCustomerTokenAccessState(token);
+  const entry = access.entry || getCustomerTokenRecord(token);
+
+  if (!entry) {
+    return { label: 'نادیار', className: 'b-gray', detail: 'token نەدۆزرایەوە.' };
+  }
+
+  if (access.code === 'revoked') {
+    return { label: 'وەستاندراو', className: 'b-bad', detail: 'لینکەکە وەستاندراوە.' };
+  }
+
+  if (access.code === 'expired') {
+    return { label: 'بەسەرچوو', className: 'b-warn', detail: `کۆتایی هاتووە: ${entry.expiresAt || '—'}` };
+  }
+
+  if (entry.expiresAt) {
+    return { label: 'چالاک', className: 'b-ok', detail: `کۆتایی: ${entry.expiresAt}` };
+  }
+
+  return { label: 'چالاک', className: 'b-ok', detail: 'بێ سنووری بەروار' };
+}
+
+function setCustomerLinkExpiryPrompt(token) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('دانانی expiry بۆ لینک')) return;
+  const days = prompt('لینکەکە بۆ چەند ڕۆژ چالاک بێت؟', '30');
+  if (days == null) return;
+  const entry = setCustomerTokenExpiryDays(token, days);
+  if (!entry) return showA('settingsAlert', 'bad', 'ژمارەی ڕۆژ دروست نییە.');
+  renderCustomers();
+  refreshLinkedViews();
+  showA('settingsAlert', 'ok', '✅ expiry ی لینک نوێکرایەوە.');
+}
+
+function clearCustomerLinkExpiryAction(token) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('لابردنی expiry')) return;
+  const entry = clearCustomerTokenExpiry(token);
+  if (!entry) return;
+  renderCustomers();
+  refreshLinkedViews();
+  showA('settingsAlert', 'ok', '✅ expiry لابرا.');
+}
+
+function toggleCustomerLinkRevocation(token) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('وەستاندن/چالاککردنی لینک')) return;
+  const access = getCustomerTokenAccessState(token);
+  const entry = access.entry || getCustomerTokenRecord(token);
+  if (!entry) return;
+  if (entry.revokedAt) restoreCustomerToken(token);
+  else revokeCustomerToken(token);
+  renderCustomers();
+  refreshLinkedViews();
+  showA('settingsAlert', 'ok', entry.revokedAt ? '✅ لینک چالاک کرایەوە.' : '✅ لینک وەستاندرا.');
+}
+
 function renderCustomers() {
   const cont = el('customersList'); if (!cont) return;
   const allCustomers = getCustomerStats();
@@ -2561,6 +2669,7 @@ function renderCustomers() {
     const waMsg     = encodeURIComponent('سڵاو ' + c.name + '\nکۆی کڕین: ' + fmtC(c.totalUSD,'USD') + (debt ? '\nقەرزی ماوە: ' + fmtC(c.remainUSD,'USD') : '\nقەرز نییە'));
     const waLink    = c.phone ? 'https://wa.me/' + c.phone.replace(/\D/g,'') + '?text=' + waMsg : '';
     const safeToken = (c.token || '').replace(/'/g, "\\'");
+    const linkState = getCustomerLinkStateInfo(c.token);
 
     return `<div class="card" style="margin-bottom:10px;padding:0;overflow:hidden" id="cust-card-${i}">
       <!-- سەری کارت -->
@@ -2570,14 +2679,15 @@ function renderCustomers() {
           <div>
             <div style="font-weight:700;font-size:14px">${escHtml(c.name)}</div>
             <div style="font-size:11px;color:var(--muted)">📞 <a href="tel:${escHtml(c.phone)}" style="color:var(--primary);text-decoration:none" onclick="event.stopPropagation()">${escHtml(c.phone)}</a> • ${c.txCount} مامەڵە</div>
-            <div style="font-size:10px;color:var(--faint);margin-top:2px">${c.products.slice(0,3).map(n=>escHtml(n)).join(' â€¢ ')}${c.products.length>3?' ...':''}</div>
+            <div style="margin-top:4px"><span class="badge ${linkState.className}">${linkState.label}</span></div>
+            <div style="font-size:10px;color:var(--faint);margin-top:2px">${c.products.slice(0,3).map(n=>escHtml(n)).join(' • ')}${c.products.length>3?' ...':''}</div>
           </div>
         </div>
         <div style="text-align:left">
           <div style="font-weight:800;font-size:13px;color:var(--ok)">${fmtC(c.totalUSD,'USD')}</div>
           <div style="font-size:10px;color:var(--faint)">${fmtC(totalIQD,'IQD')}</div>
           ${debt
-            ? `<div style="font-size:11px;font-weight:700;color:var(--bad);margin-top:3px">ًں’³ ${fmtC(c.remainUSD,'USD')}</div>
+            ? `<div style="font-size:11px;font-weight:700;color:var(--bad);margin-top:3px">قەرزی ماوە: ${fmtC(c.remainUSD,'USD')}</div>
                <div style="font-size:10px;color:var(--faint)">${fmtC(remainIQD,'IQD')}</div>`
             : `<div style="font-size:10px;color:var(--ok);margin-top:3px">✓ قەرز نییە</div>`}
         </div>
@@ -2585,7 +2695,7 @@ function renderCustomers() {
       <!-- دوگمەکان -->
       <div style="padding:0 14px 12px;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-xs btn-g" onclick="event.stopPropagation();copyLink('${link}')">🔗 لینک</button>
-        ${waLink?`<a href="${waLink}" target="_blank" class="btn btn-xs" style="background:#25d366;color:#fff;text-decoration:none" onclick="event.stopPropagation()">واتساپ</a>`:''}
+        ${waLink?`<a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn btn-xs" style="background:#25d366;color:#fff;text-decoration:none" onclick="event.stopPropagation()">واتساپ</a>`:''}
         <button class="btn btn-xs btn-g" onclick="event.stopPropagation();printCustomerReport('${safeToken}')">🖨️ پرینت</button>
         <button class="btn btn-xs btn-g" style="margin-right:auto" onclick="toggleCustomerDetail('${safeToken}','cust-detail-${i}')">👁️ زیاتر</button>
       </div>
@@ -2604,8 +2714,8 @@ function renderCustomers() {
     <!-- گەڕان و فلتەر -->
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px;position:relative">
-        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px">ًں”ژ</span>
-        <input id="custSearch" type="search" placeholder="گەڕانی کڕیار..." style="width:100%;padding:8px 32px 8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:inherit;font-size:13px"
+        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px">🔎</span>
+        <input id="custSearch" type="search" placeholder="گەڕانی کڕیار..." aria-label="گەڕانی کڕیار" style="width:100%;padding:8px 32px 8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:inherit;font-size:13px"
           oninput="renderCustomers()">
       </div>
       <select id="custFilterDebt" style="padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:inherit;font-size:13px" onchange="renderCustomers()">
@@ -2625,6 +2735,7 @@ function toggleCustomerDetail(token, detailId) {
   if (!sum) { box.style.display = 'none'; return; }
 
   const hasDebt = sum.debtRemainUSD > 0.001;
+  const linkState = getCustomerLinkStateInfo(token);
 
   // ===== پوختەی سەرەکی =====
   const summaryBox = `
@@ -2648,6 +2759,23 @@ function toggleCustomerDetail(token, detailId) {
           <div style="height:100%;width:${fmtN(sum.paidPct,0)}%;background:${sum.paidPct>=100?'var(--ok)':sum.paidPct>50?'var(--warn)':'var(--bad)'};border-radius:3px"></div>
         </div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px">${fmtN(sum.paidPct,1)}% پارەدانراوە</div>` : ''}
+    </div>`;
+
+  const linkControls = `
+    <div style="padding:12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">🔗 دۆخی لینک</div>
+          <div><span class="badge ${linkState.className}">${linkState.label}</span></div>
+          <div style="font-size:10px;color:var(--faint);margin-top:5px">${escHtml(linkState.detail)}</div>
+        </div>
+        ${window.AuthCloud && window.AuthCloud.canWrite && window.AuthCloud.canWrite() ? `
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-xs btn-g" onclick="setCustomerLinkExpiryPrompt('${token.replace(/'/g, "\\'")}')">⏳ expiry</button>
+            <button class="btn btn-xs btn-g" onclick="clearCustomerLinkExpiryAction('${token.replace(/'/g, "\\'")}')">♾️ بێ سنوور</button>
+            <button class="btn btn-xs ${linkState.className==='b-bad'?'btn-ok':'btn-bad'}" onclick="toggleCustomerLinkRevocation('${token.replace(/'/g, "\\'")}')">${linkState.className==='b-bad'?'چالاککردنەوە':'وەستاندن'}</button>
+          </div>` : ''}
+      </div>
     </div>`;
 
   // ===== قەرز بەپێی کاڵا =====
@@ -2689,7 +2817,7 @@ function toggleCustomerDetail(token, detailId) {
       </div>
     </div>`;
 
-  box.innerHTML = summaryBox + prodBreakdown + histHTML;
+  box.innerHTML = summaryBox + linkControls + prodBreakdown + histHTML;
   box.style.display = '';
 }
 
@@ -2811,6 +2939,7 @@ function openEditProduct(id) {
 }
 
 function saveEditProduct(id) {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanWrite('دەستکاریکردنی کاڵا')) return;
   const current = getProduct(id);
   if (!current) return;
 
@@ -2869,14 +2998,15 @@ function doImport(input) {
   });
 }
 
-function doReset() {
+async function doReset() {
+  if (window.AuthCloud && !window.AuthCloud.ensureCanAdmin('ڕیسێتکردنی سیستەم')) return;
   const typed = prompt('بۆ ڕیسێتی تەواو، تکایە RESET بنووسە:');
   if (typed === null) return;
   if (typed !== 'RESET') {
   showA('settingsAlert','ok','RESET بە دروستی بنووسە');
     return;
   }
-  DB.clear();
+  await Promise.resolve(DB.clear());
   window.location.reload();
 }
 
